@@ -63,6 +63,9 @@ class EditorTabs(QTabWidget):
         self.addTab(editor, base_name)
         self._open[key] = editor
         self._meta[editor] = info
+        # Load saved content before connecting signal so dirty flag stays clear.
+        if info.save_path.exists():
+            editor.setPlainText(info.save_path.read_text(encoding="utf-8"))
         # connect after addTab so spurious init signals don't trigger dirty
         editor.textChanged.connect(lambda: self._mark_dirty(editor))
         self.setCurrentWidget(editor)
