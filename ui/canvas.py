@@ -101,6 +101,55 @@ class Canvas(QGraphicsView):
 
     # ------------------------------------------------------------------ public
 
+    def export_parts(self) -> list[dict]:
+        """Return all canvas nodes as a list of dicts for system.json serialisation."""
+        result = []
+        for item in self.scene().items():
+            if isinstance(item, PartNode):
+                pos = item.pos()
+                result.append({
+                    "node_id": item.node_id(),
+                    "part_id": item.part()["id"],
+                    "name":    item.part()["name"],
+                    "x":       round(pos.x(), 2),
+                    "y":       round(pos.y(), 2),
+                })
+        return result
+
+    def import_parts(self, parts: list[dict], part_library: dict,
+                     *, clear: bool = True) -> None:
+        """Restore canvas nodes from a saved parts list.
+
+        part_library maps part_id -> part dict (from load_parts()).
+        Unknown part_ids are logged and skipped.
+        With clear=True (default) the scene is wiped first and the ID
+        counter reset so new nodes won't collide with imported ones.
+        """
+        if clear:
+            self.scene().clear()
+            self._node_seq = 0
+
+        max_seq = self._node_seq
+        for entry in parts:
+            part_id = entry.get("part_id", "")
+            part    = part_library.get(part_id)
+            if part is None:
+                self._log(f"Import: unknown part_id '{part_id}', skipped")
+                continue
+            node_id = entry.get("node_id", self._next_node_id())
+            # keep counter above any imported IDs to avoid future collisions
+            try:
+                seq = int(node_id.split("_")[-1])
+                max_seq = max(max_seq, seq)
+            except (IndexError, ValueError):
+                pass
+            node = PartNode(part, node_id)
+            node.setPos(QPointF(entry.get("x", 0.0), entry.get("y", 0.0)))
+            self.scene().addItem(node)
+            self._log(f"Imported: {part['name']}  ({part_id})  [{node_id}]")
+
+        self._node_seq = max_seq   # new nodes continue from here
+
     def add_part(self, part: dict):
         node_id = self._next_node_id()
         node = PartNode(part, node_id)

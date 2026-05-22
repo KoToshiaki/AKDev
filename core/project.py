@@ -45,6 +45,11 @@ def create_project(path: "str | Path", name: str, preset: str = "empty") -> Path
     return root
 
 
+def save_system(root: "str | Path", system_data: dict) -> None:
+    """Overwrite system.json in an existing project root."""
+    _write_json(Path(root) / "system.json", system_data)
+
+
 def load_project(root: "str | Path") -> tuple[dict, dict]:
     """Load project.json and system.json from an existing project root.
 
