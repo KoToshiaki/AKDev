@@ -57,9 +57,9 @@
 
 ## 1.4 asm → binary → RAM ロード
 
-* [ ] ビルド成功後に対象 RAM PartNode を特定する
-  - 完了条件: CPU ノードと同一 Chip 上の RAM を自動選択（または手動指定）
-* [ ] `RamPart.load_bytes()` でバイナリを RAM にロードする
+* [x] ビルド成功後に対象 RAM PartNode を特定する
+  - 完了条件: MainWin 内蔵の最小実行環境 (_sim_ram) を自動使用
+* [x] `RamPart.load_bytes()` でバイナリを RAM にロードする
   - 完了条件: ビルド後に CPU が即実行できる状態になる
 
 ## 1.5 GUI から Sim 実行

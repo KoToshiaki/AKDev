@@ -12,7 +12,10 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 from asm.asm import AsmError, assemble
+from core.cpu import AK32Part
+from core.dev import RamPart, UartPart
 from core.project import create_project, load_project, save_system
+from core.sim import Bus
 from ui.canvas import Canvas
 from ui.editor import EditorTabs
 from ui.lib import load_parts, cat_label
@@ -20,6 +23,12 @@ from ui.prop import PropPanel
 
 _DEFAULT_PROJECT = Path("build/current_project")
 _BUILD_OUT       = Path("build/out")
+
+# Minimal simulation memory map (kept within 16-bit immediate range for LDI).
+_SIM_RAM_BASE  = 0x0000
+_SIM_RAM_SIZE  = 0x0100   # 256 bytes — ends at 0x00FF
+_SIM_UART_BASE = 0x0100
+_SIM_UART_SIZE = 8
 
 
 class MainWin(QMainWindow):
@@ -29,6 +38,7 @@ class MainWin(QMainWindow):
         self.resize(1280, 800)
         self._project_root: Path | None = None
         self._setup_log()          # must be first — others write to self._log
+        self._setup_sim()          # creates self._sim_bus/ram/uart/cpu
         self._setup_canvas()       # creates self._canvas and self._editor_tabs
         self._setup_parts_lib()
         self._setup_properties()   # creates self._prop_panel
@@ -36,6 +46,16 @@ class MainWin(QMainWindow):
         self._canvas.tab_open_requested.connect(self._on_open_tab)
         self._setup_menu()         # creates self._a_new/_a_open/_a_save/etc.
         self._setup_toolbar()      # reuses those actions
+
+    # ------------------------------------------------------------------ sim setup
+
+    def _setup_sim(self):
+        self._sim_bus  = Bus()
+        self._sim_ram  = RamPart("sim_ram",  "RAM",  size=_SIM_RAM_SIZE,  base=_SIM_RAM_BASE)
+        self._sim_uart = UartPart("sim_uart", "UART", base=_SIM_UART_BASE)
+        self._sim_cpu  = AK32Part("sim_cpu",  "AK32", self._sim_bus, reset_pc=_SIM_RAM_BASE)
+        self._sim_bus.attach(self._sim_ram,  _SIM_RAM_BASE,  _SIM_RAM_SIZE)
+        self._sim_bus.attach(self._sim_uart, _SIM_UART_BASE, _SIM_UART_SIZE)
 
     # ------------------------------------------------------------------ helpers
 
@@ -187,6 +207,12 @@ class MainWin(QMainWindow):
         self._log.append(
             f"Build succeeded: {out_path.as_posix()}  ({len(binary)} bytes)"
         )
+        # Load binary into simulator RAM and reset the CPU.
+        self._sim_ram.reset()
+        self._sim_ram.load_bytes(binary)
+        self._sim_uart.reset()
+        self._sim_cpu.reset()
+        self._log.append(f"Loaded binary to RAM: {len(binary)} bytes")
 
     def _setup_menu(self):
         mb = self.menuBar()
