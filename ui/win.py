@@ -108,13 +108,25 @@ class MainWin(QMainWindow):
         if tab_name:
             self._log.append(f"Opened tab: {tab_name}")
 
+    def _save_current_tab(self):
+        save_path = self._editor_tabs.save_current()
+        if save_path:
+            self._log.append(f"Saved: {save_path}")
+        else:
+            self._log.append("Save: no editor tab active")
+
     def _setup_menu(self):
         mb = self.menuBar()
+
+        # Save action shared by menu and toolbar (Ctrl+S)
+        self._a_save = QAction("Save Project", self)
+        self._a_save.setShortcut(QKeySequence("Ctrl+S"))
+        self._a_save.triggered.connect(self._save_current_tab)
 
         fm = mb.addMenu("File")
         fm.addAction(self._act("New Project",  "Ctrl+N"))
         fm.addAction(self._act("Open Project", "Ctrl+O"))
-        fm.addAction(self._act("Save Project", "Ctrl+S"))
+        fm.addAction(self._a_save)
         fm.addSeparator()
         fm.addAction(self._act("Exit", "Ctrl+Q"))
 
@@ -140,7 +152,7 @@ class MainWin(QMainWindow):
         tb.setMovable(False)
         tb.addAction(self._act("New"))
         tb.addAction(self._act("Open"))
-        tb.addAction(self._act("Save"))
+        tb.addAction(self._a_save)   # reuse: triggers Ctrl+S / _save_current_tab
         tb.addSeparator()
         tb.addAction(self._a_build)
         tb.addSeparator()
