@@ -562,15 +562,15 @@
 
 ## 13.1 RAM
 
-* [ ] RAM パーツを実装する
-* [ ] サイズを設定できる
-* [ ] ベースアドレスを設定できる
-* [ ] `read()` を実装する
-* [ ] `write()` を実装する
-* [ ] 範囲外アクセスを検出する
-* [ ] メモリ内容をクリアできる
-* [ ] バイナリを読み込める
-* [ ] バイナリを書き出せる
+* [x] RAM パーツを実装する（`core/dev.py` RamPart）
+* [x] サイズを設定できる（`__init__` の `size` 引数）
+* [x] ベースアドレスを設定できる（`__init__` の `base` 引数）
+* [x] `read()` を実装する（32-bit LE word read）
+* [x] `write()` を実装する（32-bit LE word write）
+* [x] 範囲外アクセスを検出する（`_offset()` が BusError を送出）
+* [x] メモリ内容をクリアできる（`reset()` でゼロ埋め）
+* [x] バイナリを読み込める（`load_bytes(data, offset)` で bytearray にコピー）
+* [ ] バイナリを書き出せる（後工程 — ファイル書き出しは未実装、`dump()` で bytes 取得は可能）
 
 ## 13.2 Memory Viewer
 
@@ -583,13 +583,13 @@
 
 ## 13.3 UART
 
-* [ ] UART パーツを実装する
-* [ ] write で文字を表示する
-* [ ] UART Console を作る
-* [ ] 改行を処理する
-* [ ] 制御文字の扱いを決める
-* [ ] status register を仮実装する
-* [ ] read を仮実装する
+* [x] UART パーツを実装する（`core/dev.py` UartPart）
+* [x] write で文字を表示する（`output_text()` で蓄積テキストを取得）
+* [ ] UART Console を作る（後工程 — GUI ウィジェット未実装）
+* [x] 改行を処理する（CR / LF どちらも `\n` に変換）
+* [x] 制御文字の扱いを決める（0x20–0x7E 以外は無視）
+* [x] status register を仮実装する（+4 offset、STATUS_TX_RDY = 0x01）
+* [x] read を仮実装する（status offset → 0x01、それ以外 → 0）
 
 ## 13.4 Timer
 
