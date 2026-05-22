@@ -375,30 +375,30 @@
 
 ## 9.1 基本クラス
 
-* [ ] `Part` クラスを作る
-* [ ] `Chip` クラスを作る
-* [ ] `Bus` クラスを作る
-* [ ] `Sim` クラスを作る
-* [ ] `Signal` クラスを作るか検討する
-* [ ] `Port` クラスを作る
+* [x] `Part` クラスを作る（id / name / reset / tick / read / write）
+* [x] `Chip` クラスを作る（parts リスト + Bus を内包、reset/tick を全 Part に伝播）
+* [x] `Bus` クラスを作る（attach / read / write / BusError、重複チェック付き）
+* [x] `Sim` クラスを作る（chips / cycle / log / reset / step / run_steps）
+* [x] `Signal` クラスを作るか検討する（今回は不採用 — Port で代替、将来必要になれば追加）
+* [x] `Port` クラスを作る（name / type / direction）
 
 ## 9.2 シミュレーション制御
 
-* [ ] Reset を実装する
-* [ ] Run を実装する
-* [ ] Pause を実装する
-* [ ] Step を実装する
-* [ ] Tick loop を実装する
-* [ ] Cycle count を実装する
-* [ ] 実行速度制限を実装するか検討する
+* [x] Reset を実装する（`Sim.reset()` → 全 Chip → 全 Part に伝播）
+* [ ] Run を実装する（後工程 — GUI ループと接続後）
+* [ ] Pause を実装する（後工程）
+* [x] Step を実装する（`Sim.step()` → 全 Chip.tick()）
+* [x] Tick loop を実装する（`Sim.run_steps(n)` で n サイクル実行）
+* [x] Cycle count を実装する（`Sim.cycle` でカウント）
+* [ ] 実行速度制限を実装するか検討する（後工程 — GUI 接続後）
 
 ## 9.3 パーツ実行
 
-* [ ] 全パーツの `reset()` を呼ぶ
-* [ ] 全パーツの `tick()` を呼ぶ
-* [ ] CPU パーツを優先して tick するか決める
-* [ ] Video パーツの更新周期を決める
-* [ ] Timer パーツの周期を決める
+* [x] 全パーツの `reset()` を呼ぶ（Chip.reset() → 全 Part.reset()）
+* [x] 全パーツの `tick()` を呼ぶ（Chip.tick() → 全 Part.tick()）
+* [ ] CPU パーツを優先して tick するか決める（後工程）
+* [ ] Video パーツの更新周期を決める（後工程）
+* [ ] Timer パーツの周期を決める（後工程）
 
 ## 9.4 ログ
 
