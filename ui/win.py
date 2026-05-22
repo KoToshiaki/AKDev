@@ -1,6 +1,9 @@
 # SPDX-FileCopyrightText: 2026 Toshiaki Kou
 # SPDX-License-Identifier: BSD-3-Clause
-"""Main window — Phase 1 GUI skeleton."""
+"""Main window."""
+import shutil
+from pathlib import Path
+
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QMainWindow, QDockWidget, QTreeWidget, QTreeWidgetItem,
@@ -8,10 +11,13 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from core.project import create_project, load_project, save_system
 from ui.canvas import Canvas
 from ui.editor import EditorTabs
 from ui.lib import load_parts, cat_label
 from ui.prop import PropPanel
+
+_DEFAULT_PROJECT = Path("build/current_project")
 
 
 class MainWin(QMainWindow):
@@ -19,13 +25,14 @@ class MainWin(QMainWindow):
         super().__init__()
         self.setWindowTitle("AKDev")
         self.resize(1280, 800)
+        self._project_root: Path | None = None
         self._setup_log()          # must be first — others write to self._log
         self._setup_canvas()       # creates self._canvas and self._editor_tabs
         self._setup_parts_lib()
         self._setup_properties()   # creates self._prop_panel
         self._canvas.selection_changed.connect(self._on_canvas_selection)
         self._canvas.tab_open_requested.connect(self._on_open_tab)
-        self._setup_menu()         # creates self._a_build/_a_run/etc.
+        self._setup_menu()         # creates self._a_new/_a_open/_a_save/etc.
         self._setup_toolbar()      # reuses those actions
 
     # ------------------------------------------------------------------ helpers
@@ -108,24 +115,78 @@ class MainWin(QMainWindow):
         if tab_name:
             self._log.append(f"Opened tab: {tab_name}")
 
-    def _save_current_tab(self):
-        save_path = self._editor_tabs.save_current()
-        if save_path:
-            self._log.append(f"Saved: {save_path}")
-        else:
-            self._log.append("Save: no editor tab active")
+    def _part_library(self) -> dict:
+        """Return {part_id: part_dict} for all loaded parts."""
+        cats, _ = load_parts()
+        return {p["id"]: p for parts in cats.values() for p in parts}
+
+    def _ensure_project_root(self) -> Path:
+        """Return the current project root, creating the default one if needed."""
+        if self._project_root is not None:
+            return self._project_root
+        root = _DEFAULT_PROJECT
+        if not root.exists():
+            create_project(root, "Current Project")
+        self._project_root = root
+        return root
+
+    def _new_project(self):
+        root = _DEFAULT_PROJECT
+        if root.exists():
+            shutil.rmtree(root)
+        create_project(root, "New Project")
+        self._project_root = root
+        self._canvas.import_parts([], {})   # clear canvas
+        self._log.append(f"New project: {root.as_posix()}")
+
+    def _open_project(self):
+        root = _DEFAULT_PROJECT
+        if not (root / "project.json").exists():
+            self._log.append(f"Open: no project found at {root.as_posix()}")
+            return
+        try:
+            project, system = load_project(root)
+        except Exception as exc:
+            self._log.append(f"Open failed: {exc}")
+            return
+        self._canvas.import_parts(system.get("parts", []), self._part_library())
+        self._project_root = root
+        self._log.append(
+            f"Opened project: {root.as_posix()}  [{project.get('name', '?')}]"
+        )
+
+    def _save_project(self):
+        root = self._ensure_project_root()
+        try:
+            _, system = load_project(root)
+        except Exception:
+            system = {"chips": [], "parts": [], "links": [], "memory_map": []}
+        system["parts"] = self._canvas.export_parts()
+        save_system(root, system)
+        # also flush the active editor tab
+        tab_path = self._editor_tabs.save_current()
+        if tab_path:
+            self._log.append(f"Saved: {tab_path}")
+        self._log.append(f"Saved project: {root.as_posix()}")
 
     def _setup_menu(self):
         mb = self.menuBar()
 
-        # Save action shared by menu and toolbar (Ctrl+S)
+        self._a_new  = QAction("New Project",  self)
+        self._a_new.setShortcut(QKeySequence("Ctrl+N"))
+        self._a_new.triggered.connect(self._new_project)
+
+        self._a_open = QAction("Open Project", self)
+        self._a_open.setShortcut(QKeySequence("Ctrl+O"))
+        self._a_open.triggered.connect(self._open_project)
+
         self._a_save = QAction("Save Project", self)
         self._a_save.setShortcut(QKeySequence("Ctrl+S"))
-        self._a_save.triggered.connect(self._save_current_tab)
+        self._a_save.triggered.connect(self._save_project)
 
         fm = mb.addMenu("File")
-        fm.addAction(self._act("New Project",  "Ctrl+N"))
-        fm.addAction(self._act("Open Project", "Ctrl+O"))
+        fm.addAction(self._a_new)
+        fm.addAction(self._a_open)
         fm.addAction(self._a_save)
         fm.addSeparator()
         fm.addAction(self._act("Exit", "Ctrl+Q"))
@@ -150,9 +211,9 @@ class MainWin(QMainWindow):
     def _setup_toolbar(self):
         tb = QToolBar("Main")
         tb.setMovable(False)
-        tb.addAction(self._act("New"))
-        tb.addAction(self._act("Open"))
-        tb.addAction(self._a_save)   # reuse: triggers Ctrl+S / _save_current_tab
+        tb.addAction(self._a_new)
+        tb.addAction(self._a_open)
+        tb.addAction(self._a_save)
         tb.addSeparator()
         tb.addAction(self._a_build)
         tb.addSeparator()

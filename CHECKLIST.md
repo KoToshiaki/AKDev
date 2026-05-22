@@ -143,9 +143,9 @@
 
 ## 3.4 保存/読み込み
 
-* [ ] プロジェクトを保存できる（後工程 — GUI 接続後）
-* [x] プロジェクトを開ける（`load_project()` で project.json + system.json を読み込み可）
-* [ ] 保存後に再起動しても配置が復元される（後工程）
+* [x] プロジェクトを保存できる（File > Save Project / Ctrl+S で system.json に保存）
+* [x] プロジェクトを開ける（File > Open Project で `import_parts()` でキャンバス復元）
+* [x] 保存後に再起動しても配置が復元される（ヘッドレステストで Save → Clear → Open の位置一致を確認）
 * [ ] 不正な JSON を読んだ時にエラーを出す（後工程）
 * [ ] バージョン違いの警告を出せる（後工程）
 
