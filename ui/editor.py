@@ -2,11 +2,19 @@
 # SPDX-License-Identifier: BSD-3-Clause
 """EditorTabs — closable part-editor tab widget with dirty-state tracking."""
 from pathlib import Path
+from typing import NamedTuple
 
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QTabWidget, QTextEdit
 
 from ui.highlighter import attach_highlighter, attach_line_highlight
+
+
+class CurrentTabInfo(NamedTuple):
+    """Snapshot of the currently active editor tab."""
+    node_id: str
+    ext: str
+    text: str
 
 
 class _TabInfo:
@@ -70,6 +78,16 @@ class EditorTabs(QTabWidget):
         editor.textChanged.connect(lambda: self._mark_dirty(editor))
         self.setCurrentWidget(editor)
         return base_name
+
+    def current_tab_info(self) -> CurrentTabInfo | None:
+        """Return node_id, ext, and plain text of the active tab, or None."""
+        editor = self.currentWidget()
+        if not isinstance(editor, QTextEdit):
+            return None
+        info = self._meta.get(editor)
+        if info is None:
+            return None
+        return CurrentTabInfo(info.node_id, info.ext, editor.toPlainText())
 
     def save_current(self) -> str | None:
         """Save the active tab's content to build/edit/<node_id>.<ext>.

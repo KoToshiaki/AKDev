@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from asm.asm import AsmError, assemble
 from core.project import create_project, load_project, save_system
 from ui.canvas import Canvas
 from ui.editor import EditorTabs
@@ -18,6 +19,7 @@ from ui.lib import load_parts, cat_label
 from ui.prop import PropPanel
 
 _DEFAULT_PROJECT = Path("build/current_project")
+_BUILD_OUT       = Path("build/out")
 
 
 class MainWin(QMainWindow):
@@ -169,6 +171,23 @@ class MainWin(QMainWindow):
             self._log.append(f"Saved: {tab_path}")
         self._log.append(f"Saved project: {root.as_posix()}")
 
+    def _build(self):
+        tab = self._editor_tabs.current_tab_info()
+        if tab is None or tab.ext != "asm":
+            self._log.append("Build: current tab is not an asm file")
+            return
+        try:
+            binary = assemble(tab.text)
+        except AsmError as exc:
+            self._log.append(f"Build FAILED: {exc}")
+            return
+        _BUILD_OUT.mkdir(parents=True, exist_ok=True)
+        out_path = _BUILD_OUT / f"{tab.node_id}.bin"
+        out_path.write_bytes(binary)
+        self._log.append(
+            f"Build succeeded: {out_path.as_posix()}  ({len(binary)} bytes)"
+        )
+
     def _setup_menu(self):
         mb = self.menuBar()
 
@@ -192,7 +211,9 @@ class MainWin(QMainWindow):
         fm.addAction(self._act("Exit", "Ctrl+Q"))
 
         bm = mb.addMenu("Build")
-        self._a_build = self._act("Build", "F5")
+        self._a_build = QAction("Build", self)
+        self._a_build.setShortcut(QKeySequence("F5"))
+        self._a_build.triggered.connect(self._build)
         bm.addAction(self._a_build)
 
         rm = mb.addMenu("Run")
