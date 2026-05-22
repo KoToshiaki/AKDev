@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Toshiaki Kou
 # SPDX-License-Identifier: BSD-3-Clause
 """System Canvas — QGraphicsView with draggable PartNode items."""
-from PySide6.QtCore import Qt, QRectF, QPointF
+from PySide6.QtCore import Qt, QRectF, QPointF, Signal
 from PySide6.QtGui import QColor, QBrush, QPen, QFont
 from PySide6.QtWidgets import QGraphicsItem, QGraphicsScene, QGraphicsView, QMenu
 
@@ -72,6 +72,8 @@ class PartNode(QGraphicsItem):
 class Canvas(QGraphicsView):
     """Main system canvas — hosts PartNode items."""
 
+    selection_changed = Signal(list)  # list[PartNode]
+
     def __init__(self, log_fn=None):
         super().__init__()
         self.setScene(QGraphicsScene(self))   # parent=self prevents GC
@@ -79,6 +81,13 @@ class Canvas(QGraphicsView):
         self._place_col = 0
         self._place_row = 0
         self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
+        self.scene().selectionChanged.connect(self._on_selection_changed)
+
+    # ------------------------------------------------------------------ private
+
+    def _on_selection_changed(self):
+        items = [i for i in self.scene().selectedItems() if isinstance(i, PartNode)]
+        self.selection_changed.emit(items)
 
     # ------------------------------------------------------------------ public
 

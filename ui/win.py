@@ -4,12 +4,13 @@
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QMainWindow, QDockWidget, QTreeWidget, QTreeWidgetItem,
-    QTextEdit, QLabel, QTabWidget, QToolBar,
+    QTextEdit, QTabWidget, QToolBar,
 )
 from PySide6.QtCore import Qt
 
 from ui.canvas import Canvas
 from ui.lib import load_parts, cat_label
+from ui.prop import PropPanel
 
 
 class MainWin(QMainWindow):
@@ -20,7 +21,8 @@ class MainWin(QMainWindow):
         self._setup_log()         # must be first — others write to self._log
         self._setup_canvas()
         self._setup_parts_lib()
-        self._setup_properties()
+        self._setup_properties()  # creates self._prop_panel
+        self._canvas.selection_changed.connect(self._on_canvas_selection)
         self._setup_menu()        # creates self._a_build/_a_run/etc.
         self._setup_toolbar()     # reuses those actions
 
@@ -84,11 +86,18 @@ class MainWin(QMainWindow):
     def _setup_properties(self):
         dock = QDockWidget("Properties", self)
         dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
-        dock.setMinimumWidth(160)
-        lbl = QLabel("(no selection)")
-        lbl.setContentsMargins(8, 8, 8, 8)
-        dock.setWidget(lbl)
+        dock.setMinimumWidth(180)
+        self._prop_panel = PropPanel()
+        dock.setWidget(self._prop_panel)
         self.addDockWidget(Qt.RightDockWidgetArea, dock)
+
+    def _on_canvas_selection(self, nodes: list):
+        if not nodes:
+            self._prop_panel.show_none()
+        elif len(nodes) == 1:
+            self._prop_panel.show_part(nodes[0].part())
+        else:
+            self._prop_panel.show_multi(len(nodes))
 
     def _setup_menu(self):
         mb = self.menuBar()
