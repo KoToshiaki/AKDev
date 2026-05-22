@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Toshiaki Kou
+# SPDX-License-Identifier: BSD-3-Clause
 """Main window — stub for Phase 1."""
 from PySide6.QtWidgets import QMainWindow, QLabel
 from PySide6.QtCore import Qt
