@@ -4,11 +4,11 @@
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QMainWindow, QDockWidget, QTreeWidget, QTreeWidgetItem,
-    QGraphicsView, QGraphicsScene, QTextEdit,
-    QLabel, QTabWidget, QToolBar,
+    QTextEdit, QLabel, QTabWidget, QToolBar,
 )
 from PySide6.QtCore import Qt
 
+from ui.canvas import Canvas
 from ui.lib import load_parts, cat_label
 
 
@@ -51,8 +51,8 @@ class MainWin(QMainWindow):
         self.addDockWidget(Qt.BottomDockWidgetArea, dock)
 
     def _setup_canvas(self):
-        self._scene = QGraphicsScene(self)
-        self.setCentralWidget(QGraphicsView(self._scene))
+        self._canvas = Canvas(log_fn=self._log.append)
+        self.setCentralWidget(self._canvas)
 
     def _setup_parts_lib(self):
         dock = QDockWidget("Parts Library", self)
@@ -68,12 +68,18 @@ class MainWin(QMainWindow):
                 child = QTreeWidgetItem(cat_item, [p["name"]])
                 child.setData(0, Qt.UserRole, p)
         self._parts_tree.expandAll()
+        self._parts_tree.itemDoubleClicked.connect(self._on_part_dbl_click)
 
         for err in errors:
             self._log.append(err)
 
         dock.setWidget(self._parts_tree)
         self.addDockWidget(Qt.LeftDockWidgetArea, dock)
+
+    def _on_part_dbl_click(self, item, _col):
+        part = item.data(0, Qt.UserRole)
+        if part:
+            self._canvas.add_part(part)
 
     def _setup_properties(self):
         dock = QDockWidget("Properties", self)
