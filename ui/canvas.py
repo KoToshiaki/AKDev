@@ -72,7 +72,8 @@ class PartNode(QGraphicsItem):
 class Canvas(QGraphicsView):
     """Main system canvas — hosts PartNode items."""
 
-    selection_changed = Signal(list)  # list[PartNode]
+    selection_changed  = Signal(list)         # list[PartNode]
+    tab_open_requested = Signal(dict, str)    # (part, ext)
 
     def __init__(self, log_fn=None):
         super().__init__()
@@ -136,6 +137,10 @@ class Canvas(QGraphicsView):
             clone = PartNode(item.part())
             clone.setPos(item.pos() + QPointF(20, 20))
             self.scene().addItem(clone)
+        elif label == "プログラムを開く":
+            self.tab_open_requested.emit(item.part(), "asm")
+        elif label == "HDLを開く":
+            self.tab_open_requested.emit(item.part(), "v")
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Delete:

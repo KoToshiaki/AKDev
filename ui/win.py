@@ -4,11 +4,12 @@
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QMainWindow, QDockWidget, QTreeWidget, QTreeWidgetItem,
-    QTextEdit, QTabWidget, QToolBar,
+    QTextEdit, QToolBar, QSplitter,
 )
 from PySide6.QtCore import Qt
 
 from ui.canvas import Canvas
+from ui.editor import EditorTabs
 from ui.lib import load_parts, cat_label
 from ui.prop import PropPanel
 
@@ -18,13 +19,14 @@ class MainWin(QMainWindow):
         super().__init__()
         self.setWindowTitle("AKDev")
         self.resize(1280, 800)
-        self._setup_log()         # must be first — others write to self._log
-        self._setup_canvas()
+        self._setup_log()          # must be first — others write to self._log
+        self._setup_canvas()       # creates self._canvas and self._editor_tabs
         self._setup_parts_lib()
-        self._setup_properties()  # creates self._prop_panel
+        self._setup_properties()   # creates self._prop_panel
         self._canvas.selection_changed.connect(self._on_canvas_selection)
-        self._setup_menu()        # creates self._a_build/_a_run/etc.
-        self._setup_toolbar()     # reuses those actions
+        self._canvas.tab_open_requested.connect(self._on_open_tab)
+        self._setup_menu()         # creates self._a_build/_a_run/etc.
+        self._setup_toolbar()      # reuses those actions
 
     # ------------------------------------------------------------------ helpers
 
@@ -40,21 +42,22 @@ class MainWin(QMainWindow):
     def _setup_log(self):
         dock = QDockWidget("Log / Console", self)
         dock.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.TopDockWidgetArea)
-        dock.setMinimumHeight(120)
-        tabs = QTabWidget()
+        dock.setMinimumHeight(100)
         self._log = QTextEdit()
         self._log.setReadOnly(True)
         self._log.setPlaceholderText("Log output…")
-        tabs.addTab(self._log, "Log")
-        self._editor = QTextEdit()
-        self._editor.setPlaceholderText("Editor")
-        tabs.addTab(self._editor, "Editor")
-        dock.setWidget(tabs)
+        dock.setWidget(self._log)
         self.addDockWidget(Qt.BottomDockWidgetArea, dock)
 
     def _setup_canvas(self):
         self._canvas = Canvas(log_fn=self._log.append)
-        self.setCentralWidget(self._canvas)
+        self._editor_tabs = EditorTabs()
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.addWidget(self._canvas)
+        splitter.addWidget(self._editor_tabs)
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 1)
+        self.setCentralWidget(splitter)
 
     def _setup_parts_lib(self):
         dock = QDockWidget("Parts Library", self)
@@ -98,6 +101,11 @@ class MainWin(QMainWindow):
             self._prop_panel.show_part(nodes[0].part())
         else:
             self._prop_panel.show_multi(len(nodes))
+
+    def _on_open_tab(self, part: dict, ext: str):
+        tab_name = self._editor_tabs.open_tab(part, ext)
+        if tab_name:
+            self._log.append(f"Opened tab: {tab_name}")
 
     def _setup_menu(self):
         mb = self.menuBar()
