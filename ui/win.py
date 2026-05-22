@@ -98,12 +98,13 @@ class MainWin(QMainWindow):
         if not nodes:
             self._prop_panel.show_none()
         elif len(nodes) == 1:
-            self._prop_panel.show_part(nodes[0].part())
+            n = nodes[0]
+            self._prop_panel.show_part(n.part(), n.node_id())
         else:
             self._prop_panel.show_multi(len(nodes))
 
-    def _on_open_tab(self, part: dict, ext: str):
-        tab_name = self._editor_tabs.open_tab(part, ext)
+    def _on_open_tab(self, part: dict, node_id: str, ext: str):
+        tab_name = self._editor_tabs.open_tab(part, node_id, ext)
         if tab_name:
             self._log.append(f"Opened tab: {tab_name}")
 

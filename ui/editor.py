@@ -6,28 +6,28 @@ from PySide6.QtWidgets import QTabWidget, QTextEdit
 
 
 class EditorTabs(QTabWidget):
-    """Central tab editor. One tab per (part_id, ext) pair; no duplicates."""
+    """Central tab editor. One tab per (node_id, ext) pair; no duplicates."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setTabsClosable(True)
         self.setMovable(True)
         self.tabCloseRequested.connect(self._close_tab)
-        self._open: dict[tuple[str, str], QTextEdit] = {}  # (part_id, ext) -> widget
+        self._open: dict[tuple[str, str], QTextEdit] = {}  # (node_id, ext) -> widget
 
     # ------------------------------------------------------------------ public
 
-    def open_tab(self, part: dict, ext: str) -> str | None:
-        """Open (or focus) a tab for the given part + extension.
+    def open_tab(self, part: dict, node_id: str, ext: str) -> str | None:
+        """Open (or focus) a tab for the given node + extension.
 
         Returns the tab name if a new tab was created, None if already open.
         """
-        key = (part["id"], ext)
+        key = (node_id, ext)
         if key in self._open:
             self.setCurrentWidget(self._open[key])
             return None
 
-        tab_name = f"{part['name']}.{ext}"
+        tab_name = f"{part['name']} [{node_id}].{ext}"
         editor = QTextEdit()
         editor.setPlaceholderText(f"# {tab_name}\n")
         editor.setFont(QFont("Courier New", 10))

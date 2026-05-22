@@ -29,9 +29,10 @@ _DEFAULT_COLOR = QColor("#cccccc")
 class PartNode(QGraphicsItem):
     """A single draggable/selectable part rectangle on the canvas."""
 
-    def __init__(self, part: dict):
+    def __init__(self, part: dict, node_id: str):
         super().__init__()
-        self._part = part
+        self._part    = part
+        self._node_id = node_id
         self.setFlags(
             QGraphicsItem.GraphicsItemFlag.ItemIsMovable
             | QGraphicsItem.GraphicsItemFlag.ItemIsSelectable
@@ -40,6 +41,9 @@ class PartNode(QGraphicsItem):
 
     def part(self) -> dict:
         return self._part
+
+    def node_id(self) -> str:
+        return self._node_id
 
     def boundingRect(self) -> QRectF:
         return QRectF(0, 0, _NODE_W, _NODE_H)
@@ -72,8 +76,8 @@ class PartNode(QGraphicsItem):
 class Canvas(QGraphicsView):
     """Main system canvas — hosts PartNode items."""
 
-    selection_changed  = Signal(list)         # list[PartNode]
-    tab_open_requested = Signal(dict, str)    # (part, ext)
+    selection_changed  = Signal(list)              # list[PartNode]
+    tab_open_requested = Signal(dict, str, str)   # (part, node_id, ext)
 
     def __init__(self, log_fn=None):
         super().__init__()
@@ -81,6 +85,7 @@ class Canvas(QGraphicsView):
         self._log       = log_fn or (lambda s: None)
         self._place_col = 0
         self._place_row = 0
+        self._node_seq  = 0
         self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
         self.scene().selectionChanged.connect(self._on_selection_changed)
 
@@ -90,15 +95,20 @@ class Canvas(QGraphicsView):
         items = [i for i in self.scene().selectedItems() if isinstance(i, PartNode)]
         self.selection_changed.emit(items)
 
+    def _next_node_id(self) -> str:
+        self._node_seq += 1
+        return f"node_{self._node_seq:04d}"
+
     # ------------------------------------------------------------------ public
 
     def add_part(self, part: dict):
-        node = PartNode(part)
+        node_id = self._next_node_id()
+        node = PartNode(part, node_id)
         x = _ORIGIN.x() + self._place_col * (_NODE_W + _GAP_X)
         y = _ORIGIN.y() + self._place_row * (_NODE_H + _GAP_Y)
         node.setPos(QPointF(x, y))
         self.scene().addItem(node)
-        self._log(f"Added: {part['name']}  ({part['id']})")
+        self._log(f"Added: {part['name']}  ({part['id']})  [{node_id}]")
         self._place_col += 1
         if self._place_col >= _COLS:
             self._place_col = 0
@@ -134,19 +144,23 @@ class Canvas(QGraphicsView):
         if label == "削除":
             self.scene().removeItem(item)
         elif label == "複製":
-            clone = PartNode(item.part())
+            new_id = self._next_node_id()
+            clone = PartNode(item.part(), new_id)
             clone.setPos(item.pos() + QPointF(20, 20))
             self.scene().addItem(clone)
         elif label == "プログラムを開く":
-            self.tab_open_requested.emit(item.part(), "asm")
+            self.tab_open_requested.emit(item.part(), item.node_id(), "asm")
         elif label == "HDLを開く":
-            self.tab_open_requested.emit(item.part(), "v")
+            self.tab_open_requested.emit(item.part(), item.node_id(), "v")
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Delete:
             for item in self.scene().selectedItems():
                 if isinstance(item, PartNode):
-                    self._log(f"Removed: {item.part()['name']}  ({item.part()['id']})")
+                    self._log(
+                        f"Removed: {item.part()['name']}  ({item.part()['id']})"
+                        f"  [{item.node_id()}]"
+                    )
                     self.scene().removeItem(item)
         else:
             super().keyPressEvent(event)

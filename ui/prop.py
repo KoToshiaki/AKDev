@@ -52,18 +52,20 @@ class PropPanel(QWidget):
         self._header.setStyleSheet("font-style: italic; color: #888;")
         self._body.hide()
 
-    def show_part(self, part: dict):
+    def show_part(self, part: dict, node_id: str = ""):
         self._header.setText(part.get("name", "?"))
         self._header.setStyleSheet("font-weight: bold; font-size: 11px;")
-        self._rebuild_form(part)
+        self._rebuild_form(part, node_id)
         self._body.show()
 
     # ------------------------------------------------------------------ private
 
-    def _rebuild_form(self, part: dict):
+    def _rebuild_form(self, part: dict, node_id: str):
         while self._form.rowCount():
             self._form.removeRow(0)
 
+        if node_id:
+            self._add_row("Node", node_id)
         self._add_row("ID", part.get("id", ""))
         self._add_row("Category", part.get("category", ""))
         desc = part.get("description", "")
