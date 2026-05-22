@@ -6,6 +6,8 @@ from pathlib import Path
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QTabWidget, QTextEdit
 
+from ui.highlighter import attach_highlighter, attach_line_highlight
+
 
 class _TabInfo:
     """Metadata for one open editor tab."""
@@ -56,6 +58,8 @@ class EditorTabs(QTabWidget):
         editor = QTextEdit()
         editor.setPlaceholderText(f"# {base_name}\n")
         editor.setFont(QFont("Courier New", 10))
+        attach_highlighter(editor, ext)
+        attach_line_highlight(editor)
         self.addTab(editor, base_name)
         self._open[key] = editor
         self._meta[editor] = info

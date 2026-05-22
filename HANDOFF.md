@@ -116,6 +116,14 @@ AKDev v0.1 Minimal Interactive Simulator の実装。
 
 ---
 
+## 既知バグ
+
+| # | 症状 | 原因 | 対応予定 |
+|---|---|---|---|
+| 1 | タブを閉じて再度「プログラムを開く」すると内容が消える | `save_current()` は `build/edit/<node_id>.<ext>` に保存するが、`open_tab()` で保存済みファイルを読み込んでいない | 最後のテスト・修正フェーズで対応 |
+
+---
+
 ## 次にやるべき作業
 
 ### 7.1 Properties パネルの基本表示（`ui/win.py` + `ui/prop.py` 新規作成）
