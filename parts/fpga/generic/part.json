@@ -1,0 +1,11 @@
+{
+  "id": "fpga.generic",
+  "name": "Generic FPGA",
+  "category": "fpga",
+  "description": "Generic FPGA placeholder",
+  "ports": [
+    {"name": "bus",   "type": "bus.slave"},
+    {"name": "clk",   "type": "clock"},
+    {"name": "reset", "type": "reset"}
+  ]
+}

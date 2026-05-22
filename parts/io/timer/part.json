@@ -1,0 +1,12 @@
+{
+  "id": "io.timer",
+  "name": "Timer",
+  "category": "io",
+  "description": "Programmable timer with IRQ",
+  "ports": [
+    {"name": "bus",   "type": "bus.slave"},
+    {"name": "clk",   "type": "clock"},
+    {"name": "reset", "type": "reset"},
+    {"name": "irq",   "type": "irq"}
+  ]
+}

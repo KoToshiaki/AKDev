@@ -1,0 +1,13 @@
+{
+  "id": "video.regs",
+  "name": "Graphics Registers",
+  "category": "video",
+  "description": "GPU control registers (GFX_ID, BG_COLOR, CMD, ...)",
+  "ports": [
+    {"name": "bus",   "type": "bus.slave"},
+    {"name": "video", "type": "video.rgb"},
+    {"name": "clk",   "type": "clock"},
+    {"name": "reset", "type": "reset"},
+    {"name": "irq",   "type": "irq"}
+  ]
+}

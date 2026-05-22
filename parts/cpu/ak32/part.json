@@ -1,0 +1,15 @@
+{
+  "id": "cpu.ak32",
+  "name": "AK32 CPU",
+  "category": "cpu",
+  "description": "Custom 32-bit RISC CPU core",
+  "ports": [
+    {"name": "bus",   "type": "bus.master"},
+    {"name": "clk",   "type": "clock"},
+    {"name": "reset", "type": "reset"},
+    {"name": "irq",   "type": "irq"}
+  ],
+  "editable": [
+    {"name": "program", "type": "asm"}
+  ]
+}

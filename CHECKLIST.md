@@ -155,54 +155,54 @@
 
 ## 4.1 パーツ定義形式
 
-* [ ] `part.json` の必須項目を決める
-* [ ] `id` を必須にする
-* [ ] `name` を必須にする
-* [ ] `category` を必須にする
-* [ ] `ports` を必須にする
-* [ ] `resources` を任意項目にする
-* [ ] `editable` を任意項目にする
-* [ ] `sim` を任意項目にする
+* [x] `part.json` の必須項目を決める
+* [x] `id` を必須にする
+* [x] `name` を必須にする
+* [x] `category` を必須にする
+* [x] `ports` を必須にする
+* [x] `resources` を任意項目にする
+* [x] `editable` を任意項目にする
+* [x] `sim` を任意項目にする
 
 ## 4.2 パーツ読み込み
 
-* [ ] `parts/` 以下を再帰的に走査する
-* [ ] `part.json` を検出する
-* [ ] JSON を読み込む
-* [ ] 必須項目を検証する
-* [ ] 無効なパーツをスキップする
-* [ ] エラー内容を Log に出す
-* [ ] 有効なパーツを Parts Library に表示する
+* [x] `parts/` 以下を再帰的に走査する
+* [x] `part.json` を検出する
+* [x] JSON を読み込む
+* [x] 必須項目を検証する
+* [x] 無効なパーツをスキップする
+* [x] エラー内容を Log に出す
+* [x] 有効なパーツを Parts Library に表示する
 
 ## 4.3 初期パーツ作成
 
-* [ ] `fpga.ecp5_85f` を作る
-* [ ] `fpga.generic` を作る
-* [ ] `cpu.ak32` を作る
-* [ ] `mem.ram` を作る
-* [ ] `mem.vram` を作る
-* [ ] `io.uart` を作る
-* [ ] `io.timer` を作る
-* [ ] `io.gpio` を作る
-* [ ] `video.regs` を作る
-* [ ] `video.out` を作る
-* [ ] `bus.bridge` を作る
+* [x] `fpga.ecp5_85f` を作る
+* [x] `fpga.generic` を作る
+* [x] `cpu.ak32` を作る
+* [x] `mem.ram` を作る
+* [x] `mem.vram` を作る
+* [x] `io.uart` を作る
+* [x] `io.timer` を作る
+* [x] `io.gpio` を作る
+* [x] `video.regs` を作る
+* [x] `video.out` を作る
+* [x] `bus.bridge` を作る
 
 ## 4.4 パーツカテゴリ表示
 
-* [ ] FPGA カテゴリを表示する
-* [ ] CPU カテゴリを表示する
-* [ ] Memory カテゴリを表示する
-* [ ] I/O カテゴリを表示する
-* [ ] Video カテゴリを表示する
+* [x] FPGA カテゴリを表示する
+* [x] CPU カテゴリを表示する
+* [x] Memory カテゴリを表示する
+* [x] I/O カテゴリを表示する
+* [x] Video カテゴリを表示する
 * [ ] Debug カテゴリを表示する
 * [ ] Custom カテゴリを表示する
 
 ## 4.5 自作パーツ
 
-* [ ] `parts/custom/` を読み込む
+* [x] `parts/custom/` を読み込む
 * [ ] 自作パーツを Custom カテゴリに表示する
-* [ ] 自作パーツのエラーを表示する
+* [x] 自作パーツのエラーを表示する
 * [ ] パーツテンプレートを用意する
 * [ ] Memory パーツテンプレートを作る
 * [ ] Bus Device パーツテンプレートを作る

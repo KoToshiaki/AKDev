@@ -1,0 +1,11 @@
+{
+  "id": "mem.vram",
+  "name": "VRAM",
+  "category": "mem",
+  "description": "Video RAM",
+  "ports": [
+    {"name": "bus",   "type": "bus.slave"},
+    {"name": "clk",   "type": "clock"},
+    {"name": "reset", "type": "reset"}
+  ]
+}

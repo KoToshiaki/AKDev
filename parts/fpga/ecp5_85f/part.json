@@ -1,0 +1,21 @@
+{
+  "id": "fpga.ecp5_85f",
+  "name": "Lattice ECP5-85F",
+  "category": "fpga",
+  "description": "84K LUT class FPGA",
+  "ports": [
+    {"name": "bus",   "type": "bus.slave"},
+    {"name": "jtag",  "type": "debug.jtag"},
+    {"name": "clk",   "type": "clock"},
+    {"name": "reset", "type": "reset"}
+  ],
+  "resources": {
+    "lut": 84000,
+    "bram_kbit": 3836,
+    "dsp": 156
+  },
+  "editable": [
+    {"name": "hdl",     "type": "verilog"},
+    {"name": "program", "type": "asm"}
+  ]
+}
