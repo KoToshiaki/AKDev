@@ -446,41 +446,41 @@
 
 ## 11.1 CPU 状態
 
-* [ ] `r0` を常に 0 にする
-* [ ] `r1` 〜 `r15` を実装する
-* [ ] `pc` を実装する
-* [ ] `flags` を実装する
-* [ ] HALT 状態を実装する
-* [ ] Reset PC を設定できるようにする
+* [x] `r0` を常に 0 にする（`_set_reg` で idx==0 を無視）
+* [x] `r1` 〜 `r15` を実装する（16 要素リスト）
+* [x] `pc` を実装する（`reset_pc` から開始）
+* [x] `flags` を実装する（Z フラグのみ実装済み / N, C, V は後工程）
+* [x] HALT 状態を実装する（`halted` フラグ、tick() で即 return）
+* [x] Reset PC を設定できるようにする（`__init__` の `reset_pc` 引数）
 
 ## 11.2 命令実行の流れ
 
-* [ ] Fetch を作る
-* [ ] Decode を作る
-* [ ] Execute を作る
-* [ ] PC 更新を作る
-* [ ] 例外時に停止する
-* [ ] 不正命令を検出する
+* [x] Fetch を作る（`bus.read(pc)` で 32-bit 命令を取得）
+* [x] Decode を作る（`_execute` でフィールド抽出）
+* [x] Execute を作る（各 opcode 処理）
+* [x] PC 更新を作る（fetch 後に `pc += 4`）
+* [x] 例外時に停止する（BusError 発生時に `halted = True`）
+* [x] 不正命令を検出する（未知 opcode → `halted = True`）
 
 ## 11.3 算術・論理命令
 
-* [ ] `NOP`
-* [ ] `HALT`
-* [ ] `LDI`
-* [ ] `ADD`
-* [ ] `SUB`
-* [ ] `AND`
-* [ ] `OR`
-* [ ] `XOR`
-* [ ] `SHL`
-* [ ] `SHR`
+* [x] `NOP`（op=0x00、pc のみ進む）
+* [x] `HALT`（op=0x01、`halted=True`、PC を HALT 位置に保持）
+* [x] `LDI`（op=0x02、rd に imm16 をロード）
+* [ ] `ADD`（後工程）
+* [ ] `SUB`（後工程）
+* [ ] `AND`（後工程）
+* [ ] `OR`（後工程）
+* [ ] `XOR`（後工程）
+* [ ] `SHL`（後工程）
+* [ ] `SHR`（後工程）
 
 ## 11.4 メモリ命令
 
-* [ ] `LD`
-* [ ] `ST`
-* [ ] `IN`
-* [ ] `OUT`
+* [ ] `LD`（後工程）
+* [ ] `ST`（後工程）
+* [ ] `IN`（後工程）
+* [x] `OUT`（op=0x03、`bus.write(regs[rd], regs[rs])` で Bus 書き込み）
 * [ ] byte / halfword / word アクセスをどう扱うか決める
 * [ ] アラインメント違反をどう扱うか決める
 
