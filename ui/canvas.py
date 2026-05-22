@@ -3,7 +3,7 @@
 """System Canvas — QGraphicsView with draggable PartNode items."""
 from PySide6.QtCore import Qt, QRectF, QPointF
 from PySide6.QtGui import QColor, QBrush, QPen, QFont
-from PySide6.QtWidgets import QGraphicsItem, QGraphicsScene, QGraphicsView
+from PySide6.QtWidgets import QGraphicsItem, QGraphicsScene, QGraphicsView, QMenu
 
 
 _NODE_W = 140
@@ -95,6 +95,38 @@ class Canvas(QGraphicsView):
             self._place_row += 1
 
     # ------------------------------------------------------------------ events
+
+    def contextMenuEvent(self, event):
+        item = self.itemAt(event.pos())
+        if not isinstance(item, PartNode):
+            super().contextMenuEvent(event)
+            return
+
+        name = item.part()["name"]
+        menu  = QMenu(self)
+        menu.addAction("プログラムを開く")
+        menu.addAction("HDLを開く")
+        menu.addSeparator()
+        menu.addAction("設定")
+        menu.addAction("信号を見る")
+        menu.addAction("メモリを見る")
+        menu.addSeparator()
+        menu.addAction("複製")
+        menu.addAction("削除")
+
+        chosen = menu.exec(event.globalPos())
+        if chosen is None:
+            return
+
+        label = chosen.text()
+        self._log(f"Node Action: {label} - {name}")
+
+        if label == "削除":
+            self.scene().removeItem(item)
+        elif label == "複製":
+            clone = PartNode(item.part())
+            clone.setPos(item.pos() + QPointF(20, 20))
+            self.scene().addItem(clone)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Delete:
