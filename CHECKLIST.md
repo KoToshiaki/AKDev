@@ -75,40 +75,40 @@
 
 ## 2.2 メインレイアウト
 
-* [ ] メニューバーを表示する
-* [ ] ツールバーを表示する
-* [ ] 左側に Parts Library パネルを置く
-* [ ] 中央に System Canvas を置く
-* [ ] 右側に Properties パネルを置く
-* [ ] 下側に Log / Console パネルを置く
-* [ ] 中央または下部に Tab Editor 領域を置く
-* [ ] レイアウトをリサイズ可能にする
+* [x] メニューバーを表示する
+* [x] ツールバーを表示する
+* [x] 左側に Parts Library パネルを置く
+* [x] 中央に System Canvas を置く
+* [x] 右側に Properties パネルを置く
+* [x] 下側に Log / Console パネルを置く
+* [x] 中央または下部に Tab Editor 領域を置く
+* [x] レイアウトをリサイズ可能にする
 
 ## 2.3 メニュー項目
 
-* [ ] `File > New Project` を追加する
-* [ ] `File > Open Project` を追加する
-* [ ] `File > Save Project` を追加する
-* [ ] `File > Exit` を追加する
-* [ ] `Build > Build` を追加する
-* [ ] `Run > Run` を追加する
-* [ ] `Run > Pause` を追加する
-* [ ] `Run > Step` を追加する
-* [ ] `Run > Reset` を追加する
-* [ ] `View > Bus Trace` を追加する
-* [ ] `View > Memory` を追加する
-* [ ] `View > Registers` を追加する
+* [x] `File > New Project` を追加する
+* [x] `File > Open Project` を追加する
+* [x] `File > Save Project` を追加する
+* [x] `File > Exit` を追加する
+* [x] `Build > Build` を追加する
+* [x] `Run > Run` を追加する
+* [x] `Run > Pause` を追加する
+* [x] `Run > Step` を追加する
+* [x] `Run > Reset` を追加する
+* [x] `View > Bus Trace` を追加する
+* [x] `View > Memory` を追加する
+* [x] `View > Registers` を追加する
 
 ## 2.4 ツールバー
 
-* [ ] New ボタンを追加する
-* [ ] Open ボタンを追加する
-* [ ] Save ボタンを追加する
-* [ ] Build ボタンを追加する
-* [ ] Run ボタンを追加する
-* [ ] Pause ボタンを追加する
-* [ ] Step ボタンを追加する
-* [ ] Reset ボタンを追加する
+* [x] New ボタンを追加する
+* [x] Open ボタンを追加する
+* [x] Save ボタンを追加する
+* [x] Build ボタンを追加する
+* [x] Run ボタンを追加する
+* [x] Pause ボタンを追加する
+* [x] Step ボタンを追加する
+* [x] Reset ボタンを追加する
 
 ---
 
