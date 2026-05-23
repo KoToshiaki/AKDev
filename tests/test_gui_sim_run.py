@@ -32,6 +32,7 @@ def _load_hi(win: MainWin) -> None:
     win._sim_cpu.reset()
     win._sim_cycle = 0
     win._pause_requested = False
+    win._sim_bus.clear_trace()  # start each test with a clean trace
 
 
 # ---------------------------------------------------------------------------
@@ -244,6 +245,53 @@ def test_reg_view_r1_after_hi():
     r1_text = win._reg_table.item(4, 1).text()
     assert r1_text == "0x00000069", f"expected '0x00000069', got {r1_text!r}"
     print(f"PASS reg_view: r1 = {r1_text}")
+
+
+# ---------------------------------------------------------------------------
+# Bus Trace tests
+# ---------------------------------------------------------------------------
+
+def test_bus_trace_has_reads_after_run():
+    """Bus Trace panel contains READ entries after _do_run()."""
+    win = MainWin()
+    _load_hi(win)
+    win._do_run()
+    trace = win._bus_trace.toPlainText()
+    assert "READ" in trace, f"no READ found in trace:\n{trace}"
+    print("PASS bus_trace: READ entries present after run")
+
+
+def test_bus_trace_write_0x48():
+    """Bus Trace contains WRITE addr=0x0100 val=0x00000048 ('H') after Hi run."""
+    win = MainWin()
+    _load_hi(win)
+    win._do_run()
+    trace = win._bus_trace.toPlainText()
+    assert "WRITE" in trace
+    assert "addr=0x0100" in trace
+    assert "val=0x00000048" in trace, f"0x48 not found in trace:\n{trace}"
+    print("PASS bus_trace: WRITE 0x48 ('H') to UART")
+
+
+def test_bus_trace_write_0x69():
+    """Bus Trace contains val=0x00000069 ('i') after Hi run."""
+    win = MainWin()
+    _load_hi(win)
+    win._do_run()
+    trace = win._bus_trace.toPlainText()
+    assert "val=0x00000069" in trace, f"0x69 not found in trace:\n{trace}"
+    print("PASS bus_trace: WRITE 0x69 ('i') to UART")
+
+
+def test_bus_trace_clears_on_reset():
+    """Bus Trace panel is empty after _do_reset()."""
+    win = MainWin()
+    _load_hi(win)
+    win._do_run()
+    assert "READ" in win._bus_trace.toPlainText()
+    win._do_reset()
+    assert win._bus_trace.toPlainText() == ""
+    print("PASS bus_trace: cleared on reset")
 
 
 # ---------------------------------------------------------------------------

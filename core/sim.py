@@ -63,12 +63,18 @@ class BusError(Exception):
 
 class Bus:
     """Simple flat address bus.  Parts are registered with a base address and
-    size; read/write are dispatched to the matching Part."""
+    size; read/write are dispatched to the matching Part.
 
-    def __init__(self, name: str = "bus"):
-        self.name = name
-        # list of (base, inclusive_end, part)
-        self._map: list[tuple[int, int, Part]] = []
+    Optional tracing: set tracing=True to record every read/write.
+    Pass cycle_fn=lambda: <int> to include cycle numbers in trace entries.
+    """
+
+    def __init__(self, name: str = "bus", cycle_fn=None):
+        self.name      = name
+        self.tracing   = False
+        self._map:   list[tuple[int, int, Part]] = []
+        self._trace: list[str]                   = []
+        self._cycle_fn = cycle_fn  # optional callable -> int
 
     # ---- registration ----
 
@@ -95,10 +101,33 @@ class Bus:
         raise BusError(f"No device mapped at address {addr:#010x}")
 
     def read(self, addr: int) -> int:
-        return self._lookup(addr).read(addr)
+        part  = self._lookup(addr)
+        value = part.read(addr)
+        if self.tracing:
+            self._trace.append(self._fmt("READ ", addr, value, part.id))
+        return value
 
     def write(self, addr: int, value: int) -> None:
-        self._lookup(addr).write(addr, value)
+        part = self._lookup(addr)
+        part.write(addr, value)
+        if self.tracing:
+            self._trace.append(self._fmt("WRITE", addr, value, part.id))
+
+    # ---- trace helpers ----
+
+    def _fmt(self, op: str, addr: int, value: int, part_id: str) -> str:
+        prefix = f"[{self._cycle_fn()}] " if self._cycle_fn else ""
+        return (
+            f"{prefix}{op} addr={addr:#06x}  val={value:#010x}  part={part_id}"
+        )
+
+    def clear_trace(self) -> None:
+        """Discard all accumulated trace entries."""
+        self._trace.clear()
+
+    def get_trace(self) -> list[str]:
+        """Return a snapshot of accumulated trace entries."""
+        return list(self._trace)
 
     def __repr__(self) -> str:
         return f"Bus({self.name!r}, {len(self._map)} device(s))"

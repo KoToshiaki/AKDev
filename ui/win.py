@@ -40,6 +40,7 @@ class MainWin(QMainWindow):
         self._project_root: Path | None = None
         self._setup_log()            # must be first — others write to self._log
         self._setup_uart_console()   # UART Console panel (tabified with Log)
+        self._setup_bus_trace()      # Bus Trace panel (tabified with Log)
         self._setup_sim()            # creates self._sim_bus/ram/uart/cpu
         self._setup_canvas()         # creates self._canvas and self._editor_tabs
         self._setup_parts_lib()
@@ -54,14 +55,15 @@ class MainWin(QMainWindow):
     # ------------------------------------------------------------------ sim setup
 
     def _setup_sim(self):
-        self._sim_bus  = Bus()
+        self._sim_cycle: int        = 0   # init before Bus so cycle_fn lambda works
+        self._pause_requested: bool = False
+        self._sim_bus  = Bus(cycle_fn=lambda: self._sim_cycle)
         self._sim_ram  = RamPart("sim_ram",  "RAM",  size=_SIM_RAM_SIZE,  base=_SIM_RAM_BASE)
         self._sim_uart = UartPart("sim_uart", "UART", base=_SIM_UART_BASE)
         self._sim_cpu  = AK32Part("sim_cpu",  "AK32", self._sim_bus, reset_pc=_SIM_RAM_BASE)
         self._sim_bus.attach(self._sim_ram,  _SIM_RAM_BASE,  _SIM_RAM_SIZE)
         self._sim_bus.attach(self._sim_uart, _SIM_UART_BASE, _SIM_UART_SIZE)
-        self._sim_cycle: int        = 0
-        self._pause_requested: bool = False
+        self._sim_bus.tracing = True      # enable bus tracing
 
     # ------------------------------------------------------------------ helpers
 
@@ -94,6 +96,19 @@ class MainWin(QMainWindow):
         font.setFamily("Courier New")
         self._uart_console.setFont(font)
         dock.setWidget(self._uart_console)
+        self.addDockWidget(Qt.BottomDockWidgetArea, dock)
+        self.tabifyDockWidget(self._log_dock, dock)
+
+    def _setup_bus_trace(self):
+        dock = QDockWidget("Bus Trace", self)
+        dock.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.TopDockWidgetArea)
+        self._bus_trace = QPlainTextEdit()
+        self._bus_trace.setReadOnly(True)
+        self._bus_trace.setPlaceholderText("Bus read/write trace...")
+        font = self._bus_trace.font()
+        font.setFamily("Courier New")
+        self._bus_trace.setFont(font)
+        dock.setWidget(self._bus_trace)
         self.addDockWidget(Qt.BottomDockWidgetArea, dock)
         self.tabifyDockWidget(self._log_dock, dock)
 
@@ -254,9 +269,11 @@ class MainWin(QMainWindow):
         self._sim_cpu.reset()
         self._sim_cycle = 0
         self._pause_requested = False
+        self._sim_bus.clear_trace()
         self._log.append(f"Loaded binary to RAM: {len(binary)} bytes")
         self._update_uart_console()
         self._update_register_view()
+        self._update_bus_trace()
 
     # ------------------------------------------------------------------ run controls
 
@@ -275,10 +292,15 @@ class MainWin(QMainWindow):
         for i, val in enumerate(regs):
             self._reg_table.item(3 + i, 1).setText(f"0x{val:08x}")
 
+    def _update_bus_trace(self) -> None:
+        """Refresh the Bus Trace panel from accumulated trace entries."""
+        self._bus_trace.setPlainText("\n".join(self._sim_bus.get_trace()))
+
     def _do_reset(self):
         """Reset CPU and UART (RAM keeps the loaded binary)."""
         self._sim_cpu.reset()
         self._sim_uart.reset()
+        self._sim_bus.clear_trace()
         self._sim_cycle = 0
         self._pause_requested = False
         self._log.append(
@@ -286,6 +308,7 @@ class MainWin(QMainWindow):
         )
         self._update_uart_console()
         self._update_register_view()
+        self._update_bus_trace()
 
     def _do_step(self):
         """Execute one CPU instruction."""
@@ -305,6 +328,7 @@ class MainWin(QMainWindow):
             self._log.append(f"  UART: {new_chars!r}")
         self._update_uart_console()
         self._update_register_view()
+        self._update_bus_trace()
 
     def _do_run(self):
         """Run up to 1000 steps or until halted."""
@@ -322,6 +346,7 @@ class MainWin(QMainWindow):
                 )
                 self._update_uart_console()
                 self._update_register_view()
+                self._update_bus_trace()
                 return
             self._sim_cpu.tick()
             self._sim_cycle += 1
@@ -336,6 +361,7 @@ class MainWin(QMainWindow):
                 self._log.append("Run stopped (HALTED)")
                 self._update_uart_console()
                 self._update_register_view()
+                self._update_bus_trace()
                 return
         uart_after = self._sim_uart.output_text()
         if uart_after != uart_before:
@@ -345,6 +371,7 @@ class MainWin(QMainWindow):
         )
         self._update_uart_console()
         self._update_register_view()
+        self._update_bus_trace()
 
     def _do_pause(self):
         """Request pause of the running simulation."""

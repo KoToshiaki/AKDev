@@ -91,10 +91,12 @@
 
 ## 1.8 Bus Trace
 
-* [ ] Bus の read/write をログに記録する
+* [x] Bus の read/write をログに記録する
   - 完了条件: CPU の OUT 実行時に `[cycle] WRITE addr = value` が Log に出る
-* [ ] Bus Trace パネルまたは Log への出力として実装する
+  - 実装: Bus に `tracing` フラグ + `_trace` リスト + `cycle_fn` コールバックを追加。`[cycle] READ/WRITE addr=0xXXXX  val=0xXXXXXXXX  part=<id>` 形式で記録
+* [x] Bus Trace パネルまたは Log への出力として実装する
   - 完了条件: UART write が Bus Trace に見える
+  - 実装: QDockWidget "Bus Trace"（QPlainTextEdit、等幅フォント）を下部タブに追加。Reset/Build でクリア、Step/Run 後に更新
 
 ## 1.9 v0.1 統合テスト
 
