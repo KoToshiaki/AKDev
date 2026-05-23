@@ -100,14 +100,17 @@
 
 ## 1.9 v0.1 統合テスト
 
-* [ ] asm ソース（LDI + OUT + HALT で "Hi" を出力）を書く
+* [x] asm ソース（LDI + OUT + HALT で "Hi" を出力）を書く
   - 完了条件: ファイルが `src/hello.asm` に保存されている
-* [ ] Build → RAM ロード → Run の全フローを GUI 上で実行する
+* [x] Build → RAM ロード → Run の全フローを GUI 上で実行する
   - 完了条件: UART Console に "Hi" が表示される
-* [ ] Register View が実行後に正しい値を表示する
+  - テスト: `tests/test_v01_flow.py::test_v01_uart_console_shows_hi`
+* [x] Register View が実行後に正しい値を表示する
   - 完了条件: r1=105 (最後の LDI)、pc=HALT 位置が表示される
-* [ ] Bus Trace に OUT write が表示される
+  - テスト: `test_v01_register_view_r1_is_105`, `test_v01_register_view_pc_at_halt`, `test_v01_register_view_halted`
+* [x] Bus Trace に OUT write が表示される
   - 完了条件: UART アドレスへの write ログが見える
+  - テスト: `test_v01_bus_trace_write_H`, `test_v01_bus_trace_write_i`, `test_v01_bus_trace_two_uart_writes`
 
 ---
 
