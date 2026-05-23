@@ -6,9 +6,12 @@
 
 ---
 
-## 現在の到達点（2026-05-22）
+## v0.1 完了（2026-05-23）
 
-### 完了済み
+v0.1 完了条件「**アセンブリを書いて Build → CPU 実行 → UART に "Hi" が GUI 上で見える**」達成。
+統合テスト `tests/test_v01_flow.py` 9 件通過済み。
+
+### v0.1 実装済み一覧
 
 | カテゴリ | 実装内容 |
 |---|---|
@@ -17,90 +20,62 @@
 | System Canvas | PartNode 配置・移動・選択・Delete 削除・右クリックメニュー |
 | node_id 管理 | `node_0001` 形式、複数同種パーツを個別インスタンスとして管理 |
 | Properties パネル | 選択パーツの名前・ID・カテゴリ・説明・ポート・resources 表示 |
-| タブエディタ | `.asm` / `.v` タブ、dirty マーク、`build/edit/` への仮保存 |
+| タブエディタ | `.asm` / `.v` タブ、dirty マーク、`build/edit/` への仮保存・再読み込み |
 | シンタックスハイライト | `.asm`（キーワード/レジスタ/即値/コメント）/ `.v`（キーワード/数値/コメント） |
-| 現在行ハイライト | `ExtraSelections` による薄黄色ライン |
 | プロジェクト保存 | `project.json` / `system.json` 作成・保存・読み込み |
 | Canvas 座標保存 | `export_parts()` / `import_parts()` で位置を system.json に永続化 |
-| Part / Bus / Chip / Sim | `core/sim.py` — 最小シミュレータ基盤 |
-| RamPart | `core/dev.py` — 32-bit LE word 読み書き、範囲外 BusError、load_bytes |
-| UartPart | `core/dev.py` — TX バッファ、CR/LF 正規化、status レジスタスタブ |
-| AK32Part | `core/cpu.py` — NOP/HALT/LDI/OUT、r0 固定ゼロ、Z フラグ、halted 状態 |
-| ヘッドレステスト | load_bytes + Bus フェッチで UART に "Hi" を出力するテスト済み |
+| アセンブラ | `asm/asm.py` — NOP/HALT/LDI/OUT、行番号付きエラー、ラベル（1-pass） |
+| Build パイプライン | F5 → アセンブル → `build/out/*.bin` → RAM 自動ロード |
+| Part / Bus / Chip / Sim | `core/sim.py` — tracing 機能付き Bus を含む最小シミュレータ基盤 |
+| RamPart / UartPart | `core/dev.py` — 32-bit LE RAM、TX UART |
+| AK32Part | `core/cpu.py` — NOP/HALT/LDI/OUT、r0 固定ゼロ、halted 状態 |
+| Run / Step / Reset / Pause | メニュー + ショートカット（Ctrl+R / F10 / Ctrl+Shift+R / F6） |
+| UART Console | QDockWidget（下部タブ）、UartPart.output_text() を表示 |
+| Register View | QTableWidget（右側タブ）、pc / cycle / halted / r0〜r15 表示 |
+| Bus Trace | QDockWidget（下部タブ）、`[cycle] READ/WRITE addr val part` 形式で記録 |
+| サンプルソース | `src/hello.asm` — UART に "Hi" を出力する最小プログラム |
+| テスト | 合計 56 件（test_asm×17 / test_build×7 / test_gui_sim_run×21 / test_v01_flow×9 / 他） |
+
+### v0.1 完了条件チェックリスト
+
+- [x] メインウィンドウが開く
+- [x] Parts Library が見える
+- [x] System Canvas が見える
+- [x] chip0 / AK32 / RAM / UART を配置できる
+- [x] 右クリックメニューが動く
+- [x] `プログラムを開く` でタブが開く
+- [x] asm を保存できる
+- [x] asm を開き直したとき内容が復元される（B-1 修正済み）
+- [x] asm をビルドできる（アセンブラ）
+- [x] CPU がプログラムを実行できる
+- [x] UART Console に "Hi" が表示される
+- [x] Register View が更新される
+- [x] Bus Trace に write が出る
 
 ---
 
-## 既知バグ
+## v0.2 候補（v0.1 完了後に順番を確定）
 
-| # | 症状 | 原因 | 対応予定 |
-|---|---|---|---|
-| B-1 | タブを閉じて再度「プログラムを開く」すると内容が消える | `open_tab()` が `build/edit/<node_id>.<ext>` を読み込んでいない | v0.1 仕上げ前に修正（最優先） |
+詳細は `CHECKLIST2.md` のセクション 3 参照。
 
----
+### 高優先（実用性向上）
 
-## v0.1 残り作業
+- **追加命令**（ADD / SUB / LD / ST / JMP / BEQ / CALL / RET / IN）— ループや条件分岐を書けるようにする
+- **Memory Viewer**（RAM の hex ダンプパネル）— 実行中のメモリ状態を視覚化
+- **アセンブラ強化**（2-pass ラベル前方参照、disasm）
 
-v0.1 の完了条件: **アセンブリを書いて Build → CPU 実行 → UART に "Hi" が GUI 上で見える**
-
-### 優先順
-
-| 順 | 作業 | 依存 |
-|---|---|---|
-| 1 | **エディタ再読み込み** (B-1 修正) | なし |
-| 2 | **最小アセンブラ** (`asm/asm.py`) | なし |
-| 3 | **Build ボタンとアセンブラの接続** | 2 |
-| 4 | **asm → binary → RAM ロード** | 2, 3 |
-| 5 | **GUI から Sim 実行** (Run/Step/Reset) | 4 |
-| 6 | **UART Console** (出力表示パネル) | 5 |
-| 7 | **Register View** (r0〜r15, pc 表示) | 5 |
-| 8 | **Bus Trace** (write ログ表示) | 5 |
-| 9 | **v0.1 統合テスト** | 1〜8 |
-
----
-
-## v0.1 完了条件チェックリスト
-
-- [ ] メインウィンドウが開く ✅
-- [ ] Parts Library が見える ✅
-- [ ] System Canvas が見える ✅
-- [ ] chip0 / AK32 / RAM / UART を配置できる ✅
-- [ ] 右クリックメニューが動く ✅
-- [ ] `プログラムを開く` でタブが開く ✅
-- [ ] asm を保存できる ✅
-- [ ] **asm を開き直したとき内容が復元される** ← B-1 修正
-- [ ] **asm をビルドできる（アセンブラ）**
-- [ ] **CPU がプログラムを実行できる**
-- [ ] **UART コンソールに "Hi" が表示される**
-- [ ] **Register View が更新される**
-- [ ] **Bus Trace に write が出る**
-
----
-
-## v0.2 候補
-
-実装難易度と優先度で整理。v0.1 完了後に順番を確定する。
-
-### 高優先
+### 中優先（ツール完成度）
 
 - ポート表示（Canvas 上のノードにポートを描画）
 - 接続線（ポート間のエッジ描画・system.json 保存）
-- Memory Viewer（RAM の hex ダンプ表示）
 - Timer パーツ（`core/dev.py` に追加）
-- 追加命令（ADD / SUB / LD / ST / JMP / BEQ / CALL / RET / IN）
-
-### 中優先
-
-- アセンブラ強化（ラベル、エラー行番号、2-pass）
 - project.json の不正 JSON エラーハンドリング
-- パーツ設定編集（ベースアドレス、サイズ、名前）
-- system.json のパーツ設定保存
 
-### 低優先
+### 低優先（UX 改善）
 
 - グリッド表示・スナップ
 - キャンバス拡大縮小
-- プロジェクトウィザード（プリセット選択）
-- 自作パーツテンプレート生成
+- パーツ設定編集（ベースアドレス、サイズ）
 
 ---
 
