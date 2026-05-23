@@ -199,6 +199,54 @@ def test_uart_console_updates_per_step():
 
 
 # ---------------------------------------------------------------------------
+# Register View tests
+# ---------------------------------------------------------------------------
+
+def test_reg_view_after_reset():
+    """Register View shows pc=0x0000, cycle=0, halted=running after _do_reset()."""
+    win = MainWin()
+    _load_hi(win)
+    win._do_reset()
+    assert win._reg_table.item(0, 1).text() == "0x0000", (
+        win._reg_table.item(0, 1).text()
+    )
+    assert win._reg_table.item(1, 1).text() == "0"
+    assert win._reg_table.item(2, 1).text() == "running"
+    print("PASS reg_view after reset: pc=0x0000  cycle=0  halted=running")
+
+
+def test_reg_view_pc_advances_per_step():
+    """Register View pc increases by 4 after each _do_step()."""
+    win = MainWin()
+    _load_hi(win)
+    win._do_step()
+    assert win._reg_table.item(0, 1).text() == "0x0004"
+    win._do_step()
+    assert win._reg_table.item(0, 1).text() == "0x0008"
+    print("PASS reg_view: pc advances per step")
+
+
+def test_reg_view_halted_after_run():
+    """Register View shows HALTED after _do_run() with HALT program."""
+    win = MainWin()
+    _load_hi(win)
+    win._do_run()
+    assert win._reg_table.item(2, 1).text() == "HALTED"
+    print("PASS reg_view: HALTED after run")
+
+
+def test_reg_view_r1_after_hi():
+    """Register View shows r1=0x00000069 (105) after Hi program."""
+    win = MainWin()
+    _load_hi(win)
+    win._do_run()
+    # rows: 0=pc, 1=cycle, 2=halted, 3=r0, 4=r1
+    r1_text = win._reg_table.item(4, 1).text()
+    assert r1_text == "0x00000069", f"expected '0x00000069', got {r1_text!r}"
+    print(f"PASS reg_view: r1 = {r1_text}")
+
+
+# ---------------------------------------------------------------------------
 # Pause flag test
 # ---------------------------------------------------------------------------
 

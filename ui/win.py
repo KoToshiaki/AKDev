@@ -7,7 +7,8 @@ from pathlib import Path
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QMainWindow, QDockWidget, QTreeWidget, QTreeWidgetItem,
-    QTextEdit, QPlainTextEdit, QToolBar, QSplitter,
+    QTextEdit, QPlainTextEdit, QTableWidget, QTableWidgetItem,
+    QToolBar, QSplitter,
 )
 from PySide6.QtCore import Qt
 
@@ -37,16 +38,18 @@ class MainWin(QMainWindow):
         self.setWindowTitle("AKDev")
         self.resize(1280, 800)
         self._project_root: Path | None = None
-        self._setup_log()          # must be first — others write to self._log
-        self._setup_uart_console() # UART Console panel (tabified with Log)
-        self._setup_sim()          # creates self._sim_bus/ram/uart/cpu
-        self._setup_canvas()       # creates self._canvas and self._editor_tabs
+        self._setup_log()            # must be first — others write to self._log
+        self._setup_uart_console()   # UART Console panel (tabified with Log)
+        self._setup_sim()            # creates self._sim_bus/ram/uart/cpu
+        self._setup_canvas()         # creates self._canvas and self._editor_tabs
         self._setup_parts_lib()
-        self._setup_properties()   # creates self._prop_panel
+        self._setup_properties()     # creates self._prop_panel, self._props_dock
+        self._setup_register_view()  # Register View (tabified with Properties)
         self._canvas.selection_changed.connect(self._on_canvas_selection)
         self._canvas.tab_open_requested.connect(self._on_open_tab)
-        self._setup_menu()         # creates self._a_new/_a_open/_a_save/etc.
-        self._setup_toolbar()      # reuses those actions
+        self._setup_menu()           # creates self._a_new/_a_open/_a_save/etc.
+        self._setup_toolbar()        # reuses those actions
+        self._update_register_view() # populate with initial CPU state
 
     # ------------------------------------------------------------------ sim setup
 
@@ -132,12 +135,33 @@ class MainWin(QMainWindow):
             self._canvas.add_part(part)
 
     def _setup_properties(self):
-        dock = QDockWidget("Properties", self)
-        dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
-        dock.setMinimumWidth(180)
+        self._props_dock = QDockWidget("Properties", self)
+        self._props_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        self._props_dock.setMinimumWidth(180)
         self._prop_panel = PropPanel()
-        dock.setWidget(self._prop_panel)
+        self._props_dock.setWidget(self._prop_panel)
+        self.addDockWidget(Qt.RightDockWidgetArea, self._props_dock)
+
+    def _setup_register_view(self):
+        dock = QDockWidget("Register View", self)
+        dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        dock.setMinimumWidth(200)
+
+        _ROWS = ["pc", "cycle", "halted"] + [f"r{i}" for i in range(16)]
+        self._reg_table = QTableWidget(len(_ROWS), 2)
+        self._reg_table.setHorizontalHeaderLabels(["Register", "Value"])
+        self._reg_table.verticalHeader().setVisible(False)
+        self._reg_table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers
+        )
+        self._reg_table.horizontalHeader().setStretchLastSection(True)
+        for row, name in enumerate(_ROWS):
+            self._reg_table.setItem(row, 0, QTableWidgetItem(name))
+            self._reg_table.setItem(row, 1, QTableWidgetItem("---"))
+
+        dock.setWidget(self._reg_table)
         self.addDockWidget(Qt.RightDockWidgetArea, dock)
+        self.tabifyDockWidget(self._props_dock, dock)
 
     def _on_canvas_selection(self, nodes: list):
         if not nodes:
@@ -232,12 +256,24 @@ class MainWin(QMainWindow):
         self._pause_requested = False
         self._log.append(f"Loaded binary to RAM: {len(binary)} bytes")
         self._update_uart_console()
+        self._update_register_view()
 
     # ------------------------------------------------------------------ run controls
 
     def _update_uart_console(self) -> None:
         """Refresh the UART Console widget from the current UART output."""
         self._uart_console.setPlainText(self._sim_uart.output_text())
+
+    def _update_register_view(self) -> None:
+        """Refresh the Register View table from the current CPU state."""
+        regs   = self._sim_cpu.regs()
+        pc     = self._sim_cpu.pc()
+        halted = self._sim_cpu.halted()
+        self._reg_table.item(0, 1).setText(f"0x{pc:04x}")
+        self._reg_table.item(1, 1).setText(str(self._sim_cycle))
+        self._reg_table.item(2, 1).setText("HALTED" if halted else "running")
+        for i, val in enumerate(regs):
+            self._reg_table.item(3 + i, 1).setText(f"0x{val:08x}")
 
     def _do_reset(self):
         """Reset CPU and UART (RAM keeps the loaded binary)."""
@@ -249,6 +285,7 @@ class MainWin(QMainWindow):
             f"Reset: pc={self._sim_cpu.pc():#06x}  halted={self._sim_cpu.halted()}"
         )
         self._update_uart_console()
+        self._update_register_view()
 
     def _do_step(self):
         """Execute one CPU instruction."""
@@ -267,6 +304,7 @@ class MainWin(QMainWindow):
             new_chars = uart_after[len(uart_before):]
             self._log.append(f"  UART: {new_chars!r}")
         self._update_uart_console()
+        self._update_register_view()
 
     def _do_run(self):
         """Run up to 1000 steps or until halted."""
@@ -283,6 +321,7 @@ class MainWin(QMainWindow):
                     f"  pc={self._sim_cpu.pc():#06x}"
                 )
                 self._update_uart_console()
+                self._update_register_view()
                 return
             self._sim_cpu.tick()
             self._sim_cycle += 1
@@ -296,6 +335,7 @@ class MainWin(QMainWindow):
                 )
                 self._log.append("Run stopped (HALTED)")
                 self._update_uart_console()
+                self._update_register_view()
                 return
         uart_after = self._sim_uart.output_text()
         if uart_after != uart_before:
@@ -304,6 +344,7 @@ class MainWin(QMainWindow):
             f"Run stopped (1000 cycle limit)  pc={self._sim_cpu.pc():#06x}"
         )
         self._update_uart_console()
+        self._update_register_view()
 
     def _do_pause(self):
         """Request pause of the running simulation."""

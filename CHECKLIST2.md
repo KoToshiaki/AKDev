@@ -83,9 +83,10 @@
 
 ## 1.7 Register View
 
-* [ ] r0〜r15 と pc を表示するパネルを追加する
+* [x] r0〜r15 と pc を表示するパネルを追加する
   - 完了条件: Step/Run のたびに表示が更新される
-* [ ] halted 状態を表示する
+  - 実装: QDockWidget "Register View"（QTableWidget 2列、Properties とタブ共有）、cycle も表示
+* [x] halted 状態を表示する
   - 完了条件: HALT 命令実行後に "HALTED" が表示される
 
 ## 1.8 Bus Trace
