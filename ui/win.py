@@ -7,7 +7,7 @@ from pathlib import Path
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QMainWindow, QDockWidget, QTreeWidget, QTreeWidgetItem,
-    QTextEdit, QToolBar, QSplitter,
+    QTextEdit, QPlainTextEdit, QToolBar, QSplitter,
 )
 from PySide6.QtCore import Qt
 
@@ -38,6 +38,7 @@ class MainWin(QMainWindow):
         self.resize(1280, 800)
         self._project_root: Path | None = None
         self._setup_log()          # must be first — others write to self._log
+        self._setup_uart_console() # UART Console panel (tabified with Log)
         self._setup_sim()          # creates self._sim_bus/ram/uart/cpu
         self._setup_canvas()       # creates self._canvas and self._editor_tabs
         self._setup_parts_lib()
@@ -71,14 +72,27 @@ class MainWin(QMainWindow):
     # ------------------------------------------------------------------ setup
 
     def _setup_log(self):
-        dock = QDockWidget("Log / Console", self)
-        dock.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.TopDockWidgetArea)
-        dock.setMinimumHeight(100)
+        self._log_dock = QDockWidget("Log / Console", self)
+        self._log_dock.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.TopDockWidgetArea)
+        self._log_dock.setMinimumHeight(100)
         self._log = QTextEdit()
         self._log.setReadOnly(True)
-        self._log.setPlaceholderText("Log output…")
-        dock.setWidget(self._log)
+        self._log.setPlaceholderText("Log output...")
+        self._log_dock.setWidget(self._log)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self._log_dock)
+
+    def _setup_uart_console(self):
+        dock = QDockWidget("UART Console", self)
+        dock.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.TopDockWidgetArea)
+        self._uart_console = QPlainTextEdit()
+        self._uart_console.setReadOnly(True)
+        self._uart_console.setPlaceholderText("UART output...")
+        font = self._uart_console.font()
+        font.setFamily("Courier New")
+        self._uart_console.setFont(font)
+        dock.setWidget(self._uart_console)
         self.addDockWidget(Qt.BottomDockWidgetArea, dock)
+        self.tabifyDockWidget(self._log_dock, dock)
 
     def _setup_canvas(self):
         self._canvas = Canvas(log_fn=self._log.append)
@@ -217,8 +231,13 @@ class MainWin(QMainWindow):
         self._sim_cycle = 0
         self._pause_requested = False
         self._log.append(f"Loaded binary to RAM: {len(binary)} bytes")
+        self._update_uart_console()
 
     # ------------------------------------------------------------------ run controls
+
+    def _update_uart_console(self) -> None:
+        """Refresh the UART Console widget from the current UART output."""
+        self._uart_console.setPlainText(self._sim_uart.output_text())
 
     def _do_reset(self):
         """Reset CPU and UART (RAM keeps the loaded binary)."""
@@ -229,6 +248,7 @@ class MainWin(QMainWindow):
         self._log.append(
             f"Reset: pc={self._sim_cpu.pc():#06x}  halted={self._sim_cpu.halted()}"
         )
+        self._update_uart_console()
 
     def _do_step(self):
         """Execute one CPU instruction."""
@@ -246,6 +266,7 @@ class MainWin(QMainWindow):
         if uart_after != uart_before:
             new_chars = uart_after[len(uart_before):]
             self._log.append(f"  UART: {new_chars!r}")
+        self._update_uart_console()
 
     def _do_run(self):
         """Run up to 1000 steps or until halted."""
@@ -261,6 +282,7 @@ class MainWin(QMainWindow):
                     f"Run paused at cycle {self._sim_cycle}"
                     f"  pc={self._sim_cpu.pc():#06x}"
                 )
+                self._update_uart_console()
                 return
             self._sim_cpu.tick()
             self._sim_cycle += 1
@@ -273,6 +295,7 @@ class MainWin(QMainWindow):
                     f"  pc={self._sim_cpu.pc():#06x}"
                 )
                 self._log.append("Run stopped (HALTED)")
+                self._update_uart_console()
                 return
         uart_after = self._sim_uart.output_text()
         if uart_after != uart_before:
@@ -280,6 +303,7 @@ class MainWin(QMainWindow):
         self._log.append(
             f"Run stopped (1000 cycle limit)  pc={self._sim_cpu.pc():#06x}"
         )
+        self._update_uart_console()
 
     def _do_pause(self):
         """Request pause of the running simulation."""

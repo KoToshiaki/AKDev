@@ -75,9 +75,10 @@
 
 ## 1.6 UART Console
 
-* [ ] UART 出力を表示するパネルを追加する
+* [x] UART 出力を表示するパネルを追加する
   - 完了条件: UartPart.output_text() の内容がリアルタイムで表示される
-* [ ] Reset 時に UART 出力をクリアする
+  - 実装: QDockWidget "UART Console"（QPlainTextEdit、読み取り専用、等幅フォント）、Log と同エリアにタブ表示
+* [x] Reset 時に UART 出力をクリアする
   - 完了条件: Reset 後にコンソールが空になる
 
 ## 1.7 Register View

@@ -156,6 +156,49 @@ def test_run_reset_run():
 
 
 # ---------------------------------------------------------------------------
+# UART Console widget tests
+# ---------------------------------------------------------------------------
+
+def test_uart_console_shows_hi_after_run():
+    """_uart_console widget shows 'Hi' after _do_run()."""
+    win = MainWin()
+    _load_hi(win)
+    win._do_run()
+    got = win._uart_console.toPlainText()
+    assert got == "Hi", f"expected 'Hi', got {got!r}"
+    print(f"PASS uart_console after run: {got!r}")
+
+
+def test_uart_console_clears_on_reset():
+    """_uart_console widget is empty after _do_reset()."""
+    win = MainWin()
+    _load_hi(win)
+    win._do_run()
+    assert win._uart_console.toPlainText() == "Hi"
+    win._do_reset()
+    got = win._uart_console.toPlainText()
+    assert got == "", f"expected '', got {got!r}"
+    print("PASS uart_console cleared on reset")
+
+
+def test_uart_console_updates_per_step():
+    """_uart_console shows partial output during step-by-step execution."""
+    win = MainWin()
+    _load_hi(win)
+    # Hi program: LDI r2 | LDI r1,72 | OUT('H') | LDI r1,105 | OUT('i') | HALT
+    win._do_step()  # LDI r2
+    win._do_step()  # LDI r1, 72
+    assert win._uart_console.toPlainText() == ""
+    win._do_step()  # OUT -> 'H'
+    assert win._uart_console.toPlainText() == "H"
+    win._do_step()  # LDI r1, 105
+    assert win._uart_console.toPlainText() == "H"
+    win._do_step()  # OUT -> 'i'
+    assert win._uart_console.toPlainText() == "Hi"
+    print(f"PASS uart_console step-by-step: {win._uart_console.toPlainText()!r}")
+
+
+# ---------------------------------------------------------------------------
 # Pause flag test
 # ---------------------------------------------------------------------------
 
