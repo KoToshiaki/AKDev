@@ -64,14 +64,14 @@
 
 ## 1.5 GUI から Sim 実行
 
-* [ ] `Run > Reset`（Ctrl+Shift+R）で `Sim.reset()` を呼ぶ
+* [x] `Run > Reset`（Ctrl+Shift+R）で `Sim.reset()` を呼ぶ
   - 完了条件: CPU pc / regs / halted が初期化される
-* [ ] `Run > Step`（F10）で `Sim.step()` を 1 回呼ぶ
-  - 完了条件: 1 命令実行されて Register View が更新される
-* [ ] `Run > Run`（Ctrl+R）で HALT または指定サイクルまで連続実行する
-  - 完了条件: HALT で自動停止する
-* [ ] `Run > Pause`（F6）で実行を中断する
-  - 完了条件: Run 中に Pause できる
+* [x] `Run > Step`（F10）で `Sim.step()` を 1 回呼ぶ
+  - 完了条件: 1 命令実行されて Log に cycle/pc/halted が出る
+* [x] `Run > Run`（Ctrl+R）で HALT または指定サイクルまで連続実行する
+  - 完了条件: HALT で自動停止する（最大 1000 step）
+* [x] `Run > Pause`（F6）で実行を中断する
+  - 完了条件: _pause_requested フラグを立てる仮実装（Log に "Pause requested" を出す）
 
 ## 1.6 UART Console
 

@@ -56,6 +56,8 @@ class MainWin(QMainWindow):
         self._sim_cpu  = AK32Part("sim_cpu",  "AK32", self._sim_bus, reset_pc=_SIM_RAM_BASE)
         self._sim_bus.attach(self._sim_ram,  _SIM_RAM_BASE,  _SIM_RAM_SIZE)
         self._sim_bus.attach(self._sim_uart, _SIM_UART_BASE, _SIM_UART_SIZE)
+        self._sim_cycle: int        = 0
+        self._pause_requested: bool = False
 
     # ------------------------------------------------------------------ helpers
 
@@ -212,7 +214,77 @@ class MainWin(QMainWindow):
         self._sim_ram.load_bytes(binary)
         self._sim_uart.reset()
         self._sim_cpu.reset()
+        self._sim_cycle = 0
+        self._pause_requested = False
         self._log.append(f"Loaded binary to RAM: {len(binary)} bytes")
+
+    # ------------------------------------------------------------------ run controls
+
+    def _do_reset(self):
+        """Reset CPU and UART (RAM keeps the loaded binary)."""
+        self._sim_cpu.reset()
+        self._sim_uart.reset()
+        self._sim_cycle = 0
+        self._pause_requested = False
+        self._log.append(
+            f"Reset: pc={self._sim_cpu.pc():#06x}  halted={self._sim_cpu.halted()}"
+        )
+
+    def _do_step(self):
+        """Execute one CPU instruction."""
+        if self._sim_cpu.halted():
+            self._log.append("Step: CPU is halted — Reset to restart")
+            return
+        uart_before = self._sim_uart.output_text()
+        self._sim_cpu.tick()
+        self._sim_cycle += 1
+        uart_after = self._sim_uart.output_text()
+        self._log.append(
+            f"Step [{self._sim_cycle}]: pc={self._sim_cpu.pc():#06x}"
+            f"  halted={self._sim_cpu.halted()}"
+        )
+        if uart_after != uart_before:
+            new_chars = uart_after[len(uart_before):]
+            self._log.append(f"  UART: {new_chars!r}")
+
+    def _do_run(self):
+        """Run up to 1000 steps or until halted."""
+        if self._sim_cpu.halted():
+            self._log.append("Run: CPU is halted — Reset to restart")
+            return
+        self._pause_requested = False
+        self._log.append("Run started")
+        uart_before = self._sim_uart.output_text()
+        for _ in range(1000):
+            if self._pause_requested:
+                self._log.append(
+                    f"Run paused at cycle {self._sim_cycle}"
+                    f"  pc={self._sim_cpu.pc():#06x}"
+                )
+                return
+            self._sim_cpu.tick()
+            self._sim_cycle += 1
+            if self._sim_cpu.halted():
+                uart_after = self._sim_uart.output_text()
+                if uart_after != uart_before:
+                    self._log.append(f"  UART: {uart_after!r}")
+                self._log.append(
+                    f"HALTED at cycle {self._sim_cycle}"
+                    f"  pc={self._sim_cpu.pc():#06x}"
+                )
+                self._log.append("Run stopped (HALTED)")
+                return
+        uart_after = self._sim_uart.output_text()
+        if uart_after != uart_before:
+            self._log.append(f"  UART: {uart_after!r}")
+        self._log.append(
+            f"Run stopped (1000 cycle limit)  pc={self._sim_cpu.pc():#06x}"
+        )
+
+    def _do_pause(self):
+        """Request pause of the running simulation."""
+        self._pause_requested = True
+        self._log.append("Pause requested")
 
     def _setup_menu(self):
         mb = self.menuBar()
@@ -243,10 +315,22 @@ class MainWin(QMainWindow):
         bm.addAction(self._a_build)
 
         rm = mb.addMenu("Run")
-        self._a_run   = self._act("Run",   "Ctrl+R")
-        self._a_pause = self._act("Pause", "F6")
-        self._a_step  = self._act("Step",  "F10")
-        self._a_reset = self._act("Reset", "Ctrl+Shift+R")
+        self._a_reset = QAction("Reset", self)
+        self._a_reset.setShortcut(QKeySequence("Ctrl+Shift+R"))
+        self._a_reset.triggered.connect(self._do_reset)
+
+        self._a_step = QAction("Step", self)
+        self._a_step.setShortcut(QKeySequence("F10"))
+        self._a_step.triggered.connect(self._do_step)
+
+        self._a_run = QAction("Run", self)
+        self._a_run.setShortcut(QKeySequence("Ctrl+R"))
+        self._a_run.triggered.connect(self._do_run)
+
+        self._a_pause = QAction("Pause", self)
+        self._a_pause.setShortcut(QKeySequence("F6"))
+        self._a_pause.triggered.connect(self._do_pause)
+
         for a in (self._a_run, self._a_pause, self._a_step, self._a_reset):
             rm.addAction(a)
 
