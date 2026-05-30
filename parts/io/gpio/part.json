@@ -1,0 +1,12 @@
+{
+  "id": "io.gpio",
+  "name": "GPIO",
+  "category": "io",
+  "description": "General purpose I/O controller",
+  "ports": [
+    {"name": "bus",   "type": "bus.slave"},
+    {"name": "gpio",  "type": "gpio"},
+    {"name": "clk",   "type": "clock"},
+    {"name": "reset", "type": "reset"}
+  ]
+}

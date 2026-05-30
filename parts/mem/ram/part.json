@@ -1,0 +1,11 @@
+{
+  "id": "mem.ram",
+  "name": "RAM",
+  "category": "mem",
+  "description": "General purpose RAM",
+  "ports": [
+    {"name": "bus",   "type": "bus.slave"},
+    {"name": "clk",   "type": "clock"},
+    {"name": "reset", "type": "reset"}
+  ]
+}

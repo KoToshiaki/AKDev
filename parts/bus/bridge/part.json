@@ -1,0 +1,12 @@
+{
+  "id": "bus.bridge",
+  "name": "Bus Bridge",
+  "category": "bus",
+  "description": "Inter-chip bus bridge for chip-to-chip communication",
+  "ports": [
+    {"name": "master", "type": "bus.master"},
+    {"name": "slave",  "type": "bus.slave"},
+    {"name": "clk",    "type": "clock"},
+    {"name": "reset",  "type": "reset"}
+  ]
+}

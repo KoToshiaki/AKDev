@@ -1,0 +1,11 @@
+{
+  "id": "video.out",
+  "name": "Video Out",
+  "category": "video",
+  "description": "Digital video output controller",
+  "ports": [
+    {"name": "video", "type": "video.rgb"},
+    {"name": "clk",   "type": "clock"},
+    {"name": "reset", "type": "reset"}
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "id": "io.uart",
+  "name": "UART",
+  "category": "io",
+  "description": "Universal Asynchronous Receiver/Transmitter",
+  "ports": [
+    {"name": "bus",    "type": "bus.slave"},
+    {"name": "serial", "type": "serial.uart"},
+    {"name": "clk",    "type": "clock"},
+    {"name": "reset",  "type": "reset"},
+    {"name": "irq",    "type": "irq"}
+  ]
+}
