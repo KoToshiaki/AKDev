@@ -335,24 +335,42 @@
 
 # 10. Canvas Signal Overlay
 
-## 9.1 Bus への last_transactions 追加
+## 9.1 Bus への last_transactions 追加（完了）
 
-* [ ] `core/sim.py` の `Bus` に `last_transactions: dict` を追加する
-  - 完了条件: `last_transactions[part_name] = ("READ" | "WRITE", addr, val)` が最新トランザクションを保持する
-* [ ] `Bus` のトランザクション処理で `last_transactions` を更新する
-* [ ] `Bus.reset_transactions()` を追加する
+* [x] `core/sim.py` の `Bus` に `last_transactions: dict` を追加する
+  - 完了条件: `last_transactions[part_id] = ("READ" | "WRITE", addr, val)` が最新トランザクションを保持する
+* [x] `Bus` のトランザクション処理で `last_transactions` を更新する
+* [x] `Bus.reset_transactions()` を追加する
 
-## 9.2 PartNode へのオーバーレイ表示
+## 9.2 ConnectionLine / Canvas Signal Overlay（完了）
 
-* [ ] `ui/canvas.py` の `PartNode` に `set_overlay(text)` メソッドを追加する
-  - 完了条件: `QGraphicsSimpleTextItem` でノード右下に小さなテキストを表示できる
-* [ ] オーバーレイテキストのフォント・色を設定する（8〜9pt）
+* [x] `ui/canvas.py` の `ConnectionLine` に `kind()` アクセサを追加する
+* [x] `ConnectionLine.set_active(active: bool)` を追加する
+  - 完了条件: `active=True` で線を明るく・太くする。`active=False` で元のペンに戻す
+* [x] `Canvas.update_signal_overlay(transactions: dict)` を追加する
+  - 完了条件: transactions が空でなければ bus kind の ConnectionLine を active にする
+* [x] `Canvas.clear_signal_overlay()` を追加する
+  - 完了条件: 全 ConnectionLine を active=False にする
+* [x] `Canvas.get_all_nodes()` を追加する（テスト補助用）
 
-## 9.3 win.py との連携
+## 9.3 win.py との連携（完了）
 
-* [ ] Step / Run 後に `bus.last_transactions` を参照してオーバーレイを更新する
-* [ ] Reset 時に全パーツノードのオーバーレイをクリアする
-* [ ] Build 時にオーバーレイをクリアする
+* [x] Step / Run 後に `_update_signal_overlay()` で Canvas を更新する
+* [x] Reset 時に `reset_transactions()` と `clear_signal_overlay()` を呼ぶ
+* [x] Build 時に `reset_transactions()` と `clear_signal_overlay()` を呼ぶ
+
+## 9.4 テスト（完了）
+
+* [x] `tests/test_canvas_signal_overlay.py` を新規作成（29 件）
+  - ConnectionLine.kind() / set_active(True/False) の動作確認
+  - Canvas.update_signal_overlay() がクラッシュしないこと
+  - transactions が空なら overlay が消えること
+  - bus transaction があると bus kind の接続線が active になること
+  - signal kind の接続線は bus transaction で活性化されないこと
+  - Canvas.clear_signal_overlay() の動作確認
+  - Bus.last_transactions / reset_transactions 単体テスト
+  - MainWin 統合テスト（step/run/reset 無クラッシュ）
+* [x] pytest 505 件全通過（既存 476 件 + 新規 29 件）
 
 ---
 

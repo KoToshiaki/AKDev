@@ -414,6 +414,7 @@ class MainWin(QMainWindow):
         self._sim_cycle = 0
         self._pause_requested = False
         self._sim_bus.clear_trace()
+        self._sim_bus.reset_transactions()
         self._log.append(f"Loaded binary to RAM: {len(binary)} bytes")
         self._address_map = address_map
         self._update_uart_console()
@@ -421,6 +422,7 @@ class MainWin(QMainWindow):
         self._update_bus_trace()
         self._update_memory_viewer()
         self._editor_tabs.clear_highlight()
+        self._canvas.clear_signal_overlay()
 
     # ------------------------------------------------------------------ run controls
 
@@ -459,11 +461,16 @@ class MainWin(QMainWindow):
         except Exception:
             pass
 
+    def _update_signal_overlay(self) -> None:
+        """Refresh canvas signal overlay from the most recent bus transactions."""
+        self._canvas.update_signal_overlay(self._sim_bus.last_transactions)
+
     def _do_reset(self):
         """Reset CPU and UART (RAM keeps the loaded binary)."""
         self._sim_cpu.reset()
         self._sim_uart.reset()
         self._sim_bus.clear_trace()
+        self._sim_bus.reset_transactions()
         self._sim_cycle = 0
         self._pause_requested = False
         self._log.append(
@@ -474,6 +481,7 @@ class MainWin(QMainWindow):
         self._update_bus_trace()
         self._update_memory_viewer()
         self._editor_tabs.clear_highlight()
+        self._canvas.clear_signal_overlay()
 
     def _do_step(self):
         """Execute one CPU instruction."""
@@ -496,6 +504,7 @@ class MainWin(QMainWindow):
         self._update_bus_trace()
         self._update_memory_viewer()
         self._update_pc_highlight()
+        self._update_signal_overlay()
 
     def _do_run(self):
         """Run up to 1000 steps or until halted."""
@@ -516,6 +525,7 @@ class MainWin(QMainWindow):
                 self._update_bus_trace()
                 self._update_memory_viewer()
                 self._update_pc_highlight()
+                self._update_signal_overlay()
                 return
             self._sim_cpu.tick()
             self._sim_cycle += 1
@@ -533,6 +543,7 @@ class MainWin(QMainWindow):
                 self._update_bus_trace()
                 self._update_memory_viewer()
                 self._update_pc_highlight()
+                self._update_signal_overlay()
                 return
         uart_after = self._sim_uart.output_text()
         if uart_after != uart_before:
@@ -545,6 +556,7 @@ class MainWin(QMainWindow):
         self._update_bus_trace()
         self._update_memory_viewer()
         self._update_pc_highlight()
+        self._update_signal_overlay()
 
     def _do_pause(self):
         """Request pause of the running simulation."""

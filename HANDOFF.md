@@ -1,6 +1,6 @@
 # AKDev 引き継ぎメモ
 
-更新日: 2026-05-30（セッション 36）
+更新日: 2026-05-30（セッション 38）
 
 ---
 
@@ -270,14 +270,15 @@ AKDev と VS Code の関係は **Unity と VS Code のような関係**を目指
 HANDOFF.md を読んで現在の状態を確認してください。
 
 v0.1 / v0.2 / v0.3 は完了済みです。
-pytest 476 件全通過済み。
+pytest 505 件全通過済み。
 
-次は v0.4 Visual Debug Canvas の実装を続けます。
+次は v0.4 の仕上げ作業を行います。
 CHECKLIST5.md 完了状況:
-- セクション 1〜9: 全完了済み（AK32命令拡張 / アセンブラ / Canvas UX / Grid Snap / Bus Connection / Wire Mode / Memory Viewer / PC ハイライト）
-- pytest 476 件全通過済み
+- セクション 1〜10: 全完了済み（AK32命令拡張 / アセンブラ / Canvas UX / Grid Snap / Bus Connection / Wire Mode / Memory Viewer / PC ハイライト / Canvas Signal Overlay）
+- pytest 505 件全通過済み
 
-次は CHECKLIST5.md セクション 10（Canvas Signal Overlay）から始めてください。
+残作業: CHECKLIST5.md セクション 11〜14（サンプル確認・テスト確認・v0.4 完了宣言）
+または「配線色変更 UI / 設定画面」などの v0.4 追加機能に進む。
 ```
 
 ---
@@ -331,6 +332,26 @@ GUI 骨組み → Parts Library → Canvas → node_id 管理 → Properties →
 
 - `PATCH_PROJECT_DIALOG_ROADMAP.md` / `PATCH_PROJECT_DIALOG_CHECKLIST.md` を作成（Project Dialog / Save As パッチ計画）
 - `HANDOFF.md` を更新（現在の優先作業を Project Dialog パッチに変更）
+
+### セッション 38（2026-05-30）
+
+- CHECKLIST5.md セクション 10（Canvas Signal Overlay）を実装・完了:
+  - `core/sim.py`: `Bus` に `last_transactions: dict` を追加（`{part_id: ("READ"|"WRITE", addr, val)}`）
+  - `core/sim.py`: `Bus.read()` / `Bus.write()` で `last_transactions` を更新（tracing と独立）
+  - `core/sim.py`: `Bus.reset_transactions()` を追加（`last_transactions.clear()`）
+  - `ui/canvas.py`: `ConnectionLine` に `_kind` フィールドと `kind()` アクセサを追加
+  - `ui/canvas.py`: `ConnectionLine` に `_base_pen` を保存し `set_active(active: bool)` を追加（active=True で brighter+太め、False で元のペンに戻す）
+  - `ui/canvas.py`: `Canvas.update_signal_overlay(transactions)` を追加（transactions が空でなければ bus kind の ConnectionLine を active に）
+  - `ui/canvas.py`: `Canvas.clear_signal_overlay()` を追加（全 ConnectionLine を active=False）
+  - `ui/canvas.py`: `Canvas.get_all_nodes()` を追加（テスト補助用ヘルパー）
+  - `ui/win.py`: `_update_signal_overlay()` を追加（`canvas.update_signal_overlay(bus.last_transactions)`）
+  - `ui/win.py`: `_do_step()` 末尾に `_update_signal_overlay()` を追加
+  - `ui/win.py`: `_do_run()` の 3 終了点（pause / halt / 1000 cycle limit）に `_update_signal_overlay()` を追加
+  - `ui/win.py`: `_do_reset()` に `reset_transactions()` + `clear_signal_overlay()` を追加
+  - `ui/win.py`: `_build()` に `reset_transactions()` + `clear_signal_overlay()` を追加
+  - `tests/test_canvas_signal_overlay.py` を新規作成（29 件）
+  - pytest 505 件全通過（既存 476 件 + 新規 29 件）
+  - CHECKLIST5.md セクション 10 を全 [x] に更新
 
 ### セッション 37（2026-05-30）
 
