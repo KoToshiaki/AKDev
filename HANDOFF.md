@@ -8,8 +8,8 @@
 
 | ファイル | 役割 |
 |---|---|
-| `ROADMAP5.md` | **現在の優先作業**: v0.4 Visual Debug Canvas の設計書 |
-| `CHECKLIST5.md` | **現在の優先作業**: v0.4 Visual Debug Canvas のチェックリスト |
+| `ROADMAP5.md` | v0.4 Visual Debug Canvas の設計書（**完了**） |
+| `CHECKLIST5.md` | v0.4 Visual Debug Canvas のチェックリスト（**完了**） |
 | `old/ROADMAP4.md` | v0.3 Project & Target Foundation の設計書（完了・アーカイブ） |
 | `old/CHECKLIST4.md` | v0.3 Project & Target Foundation のチェックリスト（完了・アーカイブ） |
 | `HANDOFF.md` | このファイル — セッション間引き継ぎ |
@@ -256,6 +256,31 @@ AKDev と VS Code の関係は **Unity と VS Code のような関係**を目指
 
 ---
 
+## v0.4 Visual Debug Canvas（**完了: 2026-05-30**）
+
+**テーマ: Visual Debug Canvas** — pytest 505 件全通過。
+
+### v0.4 完了内容まとめ
+
+| 機能 | 内容 |
+|---|---|
+| AK32 命令拡張 | ADD/SUB/LD/ST/JMP/BEQ/ADDI（opcode 0x04〜0x0A） |
+| アセンブラ更新 | 2-pass ラベル解決、`assemble_ex()` で address_map 返却 |
+| fib.asm | フィボナッチ数列（ADD/ST/ADDI/BEQ/JMP）サンプル |
+| Canvas UX Patch 1A | Parts Library ドラッグ&ドロップ、add_part 中央配置 |
+| Canvas UX Patch 1B | Zoom In/Out/Reset/Fit、GridScene、ホイールズーム、右ドラッグ Pan |
+| Grid / Snap Patch | Snap to Grid（View タブトグル） |
+| Bus Connection Patch | ConnectionLine, export/import_canvas, wire mode, BFS ルーティング, RouteHandle |
+| Memory Viewer | hex dump パネル（下部タブ）、PC 行ハイライト |
+| PC ハイライト | Step/Run 後にエディタ現在実行行を薄い緑でハイライト |
+| Canvas Signal Overlay | bus kind 接続線を Bus トランザクション時に明るく光らせる |
+| サンプル確認 | hello.asm UART "Hi" ✅、fib.asm RAM[0x40..0x5C] = フィボナッチ ✅ |
+| pytest | 505 件全通過（v0.3 完了時 159 件 → v0.4 完了時 505 件） |
+
+詳細は `ROADMAP5.md` / `CHECKLIST5.md` を参照。
+
+---
+
 ## v0.2 の方向性（完了）
 
 **テーマ: Workspace UI Refinement** — 2026-05-24 完了。
@@ -269,16 +294,17 @@ AKDev と VS Code の関係は **Unity と VS Code のような関係**を目指
 ```
 HANDOFF.md を読んで現在の状態を確認してください。
 
-v0.1 / v0.2 / v0.3 は完了済みです。
+v0.1 / v0.2 / v0.3 / v0.4 は全て完了済みです。
 pytest 505 件全通過済み。
 
-次は v0.4 の仕上げ作業を行います。
-CHECKLIST5.md 完了状況:
-- セクション 1〜10: 全完了済み（AK32命令拡張 / アセンブラ / Canvas UX / Grid Snap / Bus Connection / Wire Mode / Memory Viewer / PC ハイライト / Canvas Signal Overlay）
-- pytest 505 件全通過済み
+次は v0.5 の計画を立てます。
+ROADMAP5.md の「v0.5 以降の候補」を参照して、
+ROADMAP6.md / CHECKLIST6.md を作成し、v0.5 の主軸を決めてください。
 
-残作業: CHECKLIST5.md セクション 11〜14（サンプル確認・テスト確認・v0.4 完了宣言）
-または「配線色変更 UI / 設定画面」などの v0.4 追加機能に進む。
+v0.5 候補（ROADMAP5.md 参照）:
+- 優先度 A（内部 UI 改善）: 配線色変更 UI / Part Visual 拡張 / Port Detail / 正確な Signal Overlay
+- 優先度 B（外部連携）: VS Code Companion / CALL・RET・IN 命令 / ブレークポイント UI
+- 優先度 C（長期）: KiCad 連携 / C コンパイラ / HDL 合成 / 実機書き込み
 ```
 
 ---
@@ -332,6 +358,16 @@ GUI 骨組み → Parts Library → Canvas → node_id 管理 → Properties →
 
 - `PATCH_PROJECT_DIALOG_ROADMAP.md` / `PATCH_PROJECT_DIALOG_CHECKLIST.md` を作成（Project Dialog / Save As パッチ計画）
 - `HANDOFF.md` を更新（現在の優先作業を Project Dialog パッチに変更）
+
+### セッション 39（2026-05-30）
+
+- v0.4 Visual Debug Canvas を完了宣言:
+  - pytest tests/ 505 件全通過を確認
+  - src/hello.asm headless 検証: UART "Hi" ✅、Bus trace 8 件 ✅、last_transactions 更新 ✅
+  - src/fib.asm headless 検証: RAM[0x40..0x5C] = 0,1,1,2,3,5,8,13 ✅、halted ✅
+  - CHECKLIST5.md セクション 11〜14 を全 [x] に更新、v0.4 完了宣言を追記
+  - ROADMAP5.md を v0.4 完了内容まとめ + v0.5 以降の候補リストに更新
+  - HANDOFF.md を v0.4 完了・次作業 v0.5 計画に更新
 
 ### セッション 38（2026-05-30）
 

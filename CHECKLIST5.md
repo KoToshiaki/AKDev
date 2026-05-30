@@ -381,12 +381,14 @@
 * [x] `src/fib.asm` を作成する
   - 完了条件: ADD / ST / ADDI / BEQ / JMP を使ったフィボナッチ数列プログラムが書けている
   - 完了条件: Build → Run で RAM[0x0040..0x005C] に 0, 1, 1, 2, 3, 5, 8, 13 が格納される
+  - 2026-05-30 確認済み: 56 bytes, RAM[0x40..0x5C] = 0,1,1,2,3,5,8,13 ✅
 * [x] `src/hello.asm` が変更されていないことを確認する
   - 完了条件: 既存の hello.asm が Build → Run → UART "Hi" のまま動作する
+  - 2026-05-30 確認済み: UART "Hi"、PC halt 0x0014、Bus trace 8 件 ✅
 
 ---
 
-# 12. テスト
+# 12. テスト（完了）
 
 ## 11.1 CPU テスト（完了）
 
@@ -406,28 +408,35 @@
 
 * [x] `tests/test_v04_flow.py` を新規作成する（10 件追加）
 
-## 11.5 回帰テスト
+## 11.5 回帰テスト（完了）
 
 * [x] `pytest tests/` 全件通過を確認する（2026-05-24 時点: 234 件）
 * [x] Canvas UX Patch 1A 後に `pytest tests/` 全件通過を確認する（246 件）
 * [x] Canvas UX Patch 1B 後に `pytest tests/` 全件通過を確認する（261 件）
+* [x] v0.4 最終確認: `pytest tests/` 505 件全通過（2026-05-30）
 
 ---
 
 # 13. v0.4 でやらないこと（確認）
 
-* [ ] CALL / RET 命令は実装しない（→ v0.5）
-* [ ] IN 命令は実装しない（→ v0.5）
-* [ ] ブレークポイント設定 UI は実装しない（→ v0.5）
-* [ ] バスライン上の信号アニメーションは実装しない（→ v0.5）
-* [ ] Port 状態の詳細オーバーレイは実装しない（→ v0.5）
-* [ ] VS Code Companion は実装しない（→ v0.5）
-* [ ] localhost HTTP / WebSocket サーバーは実装しない（→ v0.5）
+* [x] CALL / RET 命令は実装しない（→ v0.5）
+* [x] IN 命令は実装しない（→ v0.5）
+* [x] ブレークポイント設定 UI は実装しない（→ v0.5）
+* [x] バスライン上の信号アニメーションは実装しない（→ v0.5）
+* [x] Port 状態の詳細オーバーレイは実装しない（→ v0.5）
+* [x] VS Code Companion は実装しない（→ v0.5）
+* [x] localhost HTTP / WebSocket サーバーは実装しない（→ v0.5）
 
 ---
 
-# 14. HANDOFF 更新
+# 14. HANDOFF 更新（完了）
 
-* [ ] HANDOFF.md に v0.4 の完了内容を追記する
-* [ ] 次回の主作業を v0.5 AKDev VS Code Companion に更新する
-* [ ] pytest 件数を HANDOFF.md に記録する
+* [x] HANDOFF.md に v0.4 の完了内容を追記する
+* [x] 次回の主作業を v0.5 計画作成に更新する
+* [x] pytest 505 件を HANDOFF.md に記録する
+
+---
+
+# v0.4 完了 ✅（2026-05-30）
+
+pytest 505 件全通過。全セクション完了。
