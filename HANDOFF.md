@@ -1,6 +1,6 @@
 # AKDev 引き継ぎメモ
 
-更新日: 2026-05-30（セッション 38）
+更新日: 2026-05-30（セッション 40）
 
 ---
 
@@ -294,8 +294,8 @@ AKDev と VS Code の関係は **Unity と VS Code のような関係**を目指
 ```
 HANDOFF.md を読んで現在の状態を確認してください。
 
-v0.1 / v0.2 / v0.3 / v0.4 は全て完了済みです。
-pytest 505 件全通過済み。
+v0.1 / v0.2 / v0.3 / v0.4 / v0.4.1 は全て完了済みです。
+pytest 518 件全通過済み。
 
 次は v0.5 の計画を立てます。
 ROADMAP5.md の「v0.5 以降の候補」を参照して、
@@ -358,6 +358,41 @@ GUI 骨組み → Parts Library → Canvas → node_id 管理 → Properties →
 
 - `PATCH_PROJECT_DIALOG_ROADMAP.md` / `PATCH_PROJECT_DIALOG_CHECKLIST.md` を作成（Project Dialog / Save As パッチ計画）
 - `HANDOFF.md` を更新（現在の優先作業を Project Dialog パッチに変更）
+
+### セッション 40（2026-05-30）— v0.4.1 Patch
+
+**v0.4.1 公開前修正パッチ完了。pytest 518 件全通過。**
+
+#### P1. 配線ルートの角修正
+
+- `ConnectionLine.update_route()` を H-V 二重描画から直線 lineTo に変更
+  - BFS が返す経路点列（すでにコーナー点のみ）をそのまま直線で繋ぐことで余分な折れ線が消える
+- `ConnectionLine.update_line(p1, p2)` を `[p1, (p2.x, p1.y), p2]` の明示 H-V に変更
+- `Canvas._from_port_pos(node_id)` / `_to_port_pos(node_id)` を追加（右端・左端ポート位置）
+- `Canvas.update_connections()` をノード中心 → ポート位置（グリッドスナップ）に変更
+  - 接続線が "パーツ右端から出て左端に入る" 自然な形になった
+- `_update_wire_preview()` も `_from_port_pos` を使うよう変更
+
+#### P2. Canvas Pan を中ボタンドラッグへ変更
+
+- `mousePressEvent` / `mouseMoveEvent` / `mouseReleaseEvent` を `RightButton` → `MiddleButton`
+- `contextMenuEvent` の `_panned` ガード（右クリックメニュー抑制）を削除
+  - 右クリックは常にコンテキストメニューを表示する
+- `tests/test_canvas_pan.py` を MiddleButton 対応に全面更新
+
+#### P3. 公開前ドキュメント追加
+
+- `docs/QUICKSTART.md` 新規作成（5 分で hello.asm を動かす手順）
+- `docs/USER_GUIDE.md` 新規作成（全機能説明）
+- `README.md` を v0.4.1 対応に更新（リンク追加・できること整理）
+
+#### テスト結果
+
+- pytest 518 件全通過（v0.4 完了時 505 件 → +13 件）
+- 更新テスト: `test_canvas_pan.py`（RightButton→MiddleButton）、`test_canvas_connection_lines.py`（center→port_pos）、`test_canvas_wire_mode.py`（update_route 挙動更新）
+- 新規テスト: `test_canvas_routing.py` に 9 件追加（port_pos・update_route・update_line）、`test_canvas_pan.py` に 1 件追加
+
+---
 
 ### セッション 39（2026-05-30）
 

@@ -133,18 +133,22 @@ class ConnectionLine(QGraphicsPathItem):
             self.setPen(self._base_pen)
 
     def update_route(self, points: list) -> None:
-        """Draw a Manhattan (H-then-V) path through the given points."""
+        """Draw straight segments through the given corner points.
+
+        Points are expected to already be H/V-aligned (e.g. from BFS compression),
+        so a simple lineTo chain produces clean right-angle routing.
+        """
         if len(points) < 2:
             return
         path = QPainterPath(points[0])
-        for i in range(1, len(points)):
-            mid = QPointF(points[i].x(), points[i - 1].y())
-            path.lineTo(mid)
-            path.lineTo(points[i])
+        for p in points[1:]:
+            path.lineTo(p)
         self.setPath(path)
 
     def update_line(self, p1: QPointF, p2: QPointF) -> None:
-        self.update_route([p1, p2])
+        """Draw an H-then-V right-angle path from p1 to p2."""
+        mid = QPointF(p2.x(), p1.y())
+        self.update_route([p1, mid, p2])
 
 
 class PortDot(QGraphicsEllipseItem):
@@ -340,6 +344,16 @@ class Canvas(QGraphicsView):
             return None
         return node.pos() + QPointF(_NODE_W / 2, _NODE_H / 2)
 
+    def _from_port_pos(self, node_id: str) -> "QPointF | None":
+        """Right-edge port position; wire exits from here."""
+        node = self.get_node(node_id)
+        return node.pos() + QPointF(_NODE_W, _NODE_H / 2) if node else None
+
+    def _to_port_pos(self, node_id: str) -> "QPointF | None":
+        """Left-edge port position; wire enters here."""
+        node = self.get_node(node_id)
+        return node.pos() + QPointF(0.0, _NODE_H / 2) if node else None
+
     def _make_conn_item(self, conn: dict) -> ConnectionLine:
         line = ConnectionLine(
             conn["id"],
@@ -529,7 +543,7 @@ class Canvas(QGraphicsView):
         """Redraw dashed preview from wire start through waypoints to cursor."""
         if self._wire_preview is None or self._wire_from is None:
             return
-        start = self._node_center(self._wire_from["node_id"])
+        start = self._from_port_pos(self._wire_from["node_id"])
         if start is None:
             return
         g = float(GridScene.GRID_SIZE)
@@ -557,15 +571,19 @@ class Canvas(QGraphicsView):
             self.mode_changed.emit("wire")
 
     def update_connections(self) -> None:
-        """Refresh all connection lines using obstacle-aware BFS routing."""
+        """Refresh all connection lines using port positions and obstacle-aware BFS routing."""
+        g = float(GridScene.GRID_SIZE)
         for conn in self._connections:
             line = self._conn_items.get(conn["id"])
             if line is None:
                 continue
-            p1 = self._node_center(conn["from"]["node_id"])
-            p2 = self._node_center(conn["to"]["node_id"])
-            if p1 is None or p2 is None:
+            p1_raw = self._from_port_pos(conn["from"]["node_id"])
+            p2_raw = self._to_port_pos(conn["to"]["node_id"])
+            if p1_raw is None or p2_raw is None:
                 continue
+            # Snap port positions to grid so BFS produces clean H/V segments
+            p1 = QPointF(round(p1_raw.x() / g) * g, round(p1_raw.y() / g) * g)
+            p2 = QPointF(round(p2_raw.x() / g) * g, round(p2_raw.y() / g) * g)
             raw_route = conn.get("route", [])
             waypoints = [QPointF(p["x"], p["y"]) for p in raw_route]
             excl = {conn["from"]["node_id"], conn["to"]["node_id"]}
@@ -773,7 +791,7 @@ class Canvas(QGraphicsView):
             super().wheelEvent(event)
 
     def mousePressEvent(self, event) -> None:
-        if event.button() == Qt.MouseButton.RightButton:
+        if event.button() == Qt.MouseButton.MiddleButton:
             self._pan_origin = event.pos()
             self._pan_last   = event.pos()
             self._panned     = False
@@ -785,7 +803,7 @@ class Canvas(QGraphicsView):
     def mouseMoveEvent(self, event) -> None:
         if self._mode == "wire":
             self._update_wire_preview(self.mapToScene(event.pos()))
-        if event.buttons() & Qt.MouseButton.RightButton and self._pan_origin is not None:
+        if event.buttons() & Qt.MouseButton.MiddleButton and self._pan_origin is not None:
             total = event.pos() - self._pan_origin
             if not self._panned and total.manhattanLength() > _PAN_THRESHOLD:
                 self._panned = True
@@ -803,7 +821,7 @@ class Canvas(QGraphicsView):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event) -> None:
-        if event.button() == Qt.MouseButton.RightButton:
+        if event.button() == Qt.MouseButton.MiddleButton:
             self.unsetCursor()
             self._pan_origin = None
             self._pan_last   = None
@@ -837,10 +855,6 @@ class Canvas(QGraphicsView):
         event.acceptProposedAction()
 
     def contextMenuEvent(self, event):
-        if self._panned:
-            self._panned = False
-            return
-
         item = self.itemAt(event.pos())
         # Resolve PortDot hit to its parent PartNode
         if isinstance(item, PortDot):

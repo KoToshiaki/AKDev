@@ -440,3 +440,57 @@
 # v0.4 完了 ✅（2026-05-30）
 
 pytest 505 件全通過。全セクション完了。
+
+---
+
+# v0.4.1 Patch（2026-05-30）
+
+v0.4 公開前の修正パッチ。
+
+## P1. 配線ルートの角修正
+
+* [x] `ConnectionLine.update_route()` を H-V 二重描画から直線 lineTo に変更する
+  - 完了条件: BFS 経路点列をそのまま直線で繋ぎ、余分な折れ線が出ない
+  - 完了条件: `update_route([A, B, C])` → 3 elements（MoveTo + 2×LineTo）
+* [x] `ConnectionLine.update_line()` を明示的 H-V コーナー挿入に変更する
+  - 完了条件: `update_line(p1, p2)` → `[p1, (p2.x, p1.y), p2]` の 3 点で update_route
+* [x] `_from_port_pos()` / `_to_port_pos()` ヘルパーを `Canvas` に追加する
+  - 完了条件: 右端ポート（from）/ 左端ポート（to）の座標を返す
+* [x] `update_connections()` をノード中心 → ポート位置（グリッドスナップ）に変更する
+  - 完了条件: 接続線がパーツ右端から出て左端に入る形になる
+* [x] `_update_wire_preview()` を `_node_center` → `_from_port_pos` に変更する
+* [x] 既存 route / export_canvas / import_canvas の保存形式を壊さない ✅
+* [x] BFS 障害物回避・RouteHandle 頂点編集を壊さない ✅
+* [x] 配線 route テスト追加（`test_canvas_routing.py` 9 件）
+
+## P2. Canvas Pan を中ボタンドラッグへ変更
+
+* [x] `mousePressEvent` を `RightButton` → `MiddleButton` に変更する
+* [x] `mouseMoveEvent` を `RightButton` → `MiddleButton` に変更する
+* [x] `mouseReleaseEvent` を `RightButton` → `MiddleButton` に変更する
+* [x] `contextMenuEvent` の `_panned` ガード（右クリックメニュー抑制）を削除する
+  - 完了条件: 中ボタンパン後でも右クリックメニューが開く
+* [x] 右クリックメニュー・wire mode 右クリック waypoint 追加を壊さない ✅
+* [x] `tests/test_canvas_pan.py` を MiddleButton 対応に更新する（件数維持）
+
+## P3. 公開前ドキュメント追加
+
+* [x] `docs/QUICKSTART.md` を作成する（5 分で hello.asm を動かす手順）
+* [x] `docs/USER_GUIDE.md` を作成する（全機能説明）
+* [x] `README.md` に QUICKSTART.md / USER_GUIDE.md へのリンクを追加する
+* [x] README.md に v0.4.1 でできることを整理する
+
+## v0.4.1 テスト結果
+
+pytest 518 件全通過（v0.4 完了時 505 件 → v0.4.1 完了時 518 件）。
+
+追加テスト内訳:
+- `test_canvas_routing.py`: +13 件（route 描画・ポート位置・_from/_to_port_pos）
+- `test_canvas_pan.py`: +1 件（_panned ブロック廃止の確認）
+- `test_canvas_wire_mode.py`: +1 件（update_line H-V 確認） ← 既存 2 件をリネーム・更新
+
+---
+
+# v0.4.1 完了 ✅（2026-05-30）
+
+pytest 518 件全通過。配線角修正・中ボタン Pan・公開前ドキュメント追加。
