@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QMimeData
 
-from asm.asm import AsmError, assemble
+from asm.asm import AsmError, assemble_ex
 from core.cpu import AK32Part
 from core.dev import RamPart, UartPart
 from core.project import create_project, load_project, load_target, save_system
@@ -53,6 +53,7 @@ class MainWin(QMainWindow):
         self.setWindowTitle("AKDev")
         self.resize(1280, 800)
         self._project_root: Path | None = None
+        self._address_map: dict[int, int] = {}
         self._setup_log()            # must be first — others write to self._log
         self._setup_uart_console()   # UART Console panel (tabified with Log)
         self._setup_bus_trace()      # Bus Trace panel (tabified with Log)
@@ -390,9 +391,11 @@ class MainWin(QMainWindow):
             return
 
         try:
-            binary = assemble(tab.text)
+            binary, address_map = assemble_ex(tab.text)
         except AsmError as exc:
             self._log.append(f"Build FAILED: {exc}")
+            self._address_map = {}
+            self._editor_tabs.clear_highlight()
             return
 
         out_dir = root / "build" / "out"
@@ -412,10 +415,12 @@ class MainWin(QMainWindow):
         self._pause_requested = False
         self._sim_bus.clear_trace()
         self._log.append(f"Loaded binary to RAM: {len(binary)} bytes")
+        self._address_map = address_map
         self._update_uart_console()
         self._update_register_view()
         self._update_bus_trace()
         self._update_memory_viewer()
+        self._editor_tabs.clear_highlight()
 
     # ------------------------------------------------------------------ run controls
 
@@ -438,6 +443,15 @@ class MainWin(QMainWindow):
         """Refresh the Bus Trace panel from accumulated trace entries."""
         self._bus_trace.setPlainText("\n".join(self._sim_bus.get_trace()))
 
+    def _update_pc_highlight(self) -> None:
+        """Update editor PC-line highlight from the current CPU program counter."""
+        pc = self._sim_cpu.pc()
+        ln = self._address_map.get(pc)
+        if ln is not None:
+            self._editor_tabs.highlight_line(ln)
+        else:
+            self._editor_tabs.clear_highlight()
+
     def _update_memory_viewer(self) -> None:
         """Refresh the Memory Viewer from simulator RAM."""
         try:
@@ -459,6 +473,7 @@ class MainWin(QMainWindow):
         self._update_register_view()
         self._update_bus_trace()
         self._update_memory_viewer()
+        self._editor_tabs.clear_highlight()
 
     def _do_step(self):
         """Execute one CPU instruction."""
@@ -480,6 +495,7 @@ class MainWin(QMainWindow):
         self._update_register_view()
         self._update_bus_trace()
         self._update_memory_viewer()
+        self._update_pc_highlight()
 
     def _do_run(self):
         """Run up to 1000 steps or until halted."""
@@ -499,6 +515,7 @@ class MainWin(QMainWindow):
                 self._update_register_view()
                 self._update_bus_trace()
                 self._update_memory_viewer()
+                self._update_pc_highlight()
                 return
             self._sim_cpu.tick()
             self._sim_cycle += 1
@@ -515,6 +532,7 @@ class MainWin(QMainWindow):
                 self._update_register_view()
                 self._update_bus_trace()
                 self._update_memory_viewer()
+                self._update_pc_highlight()
                 return
         uart_after = self._sim_uart.output_text()
         if uart_after != uart_before:
@@ -526,6 +544,7 @@ class MainWin(QMainWindow):
         self._update_register_view()
         self._update_bus_trace()
         self._update_memory_viewer()
+        self._update_pc_highlight()
 
     def _do_pause(self):
         """Request pause of the running simulation."""

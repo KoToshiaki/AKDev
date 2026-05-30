@@ -319,17 +319,17 @@
 
 ## 8.1 エディタへの実装
 
-* [ ] `ui/editor.py` に `highlight_line(line_no)` メソッドを追加する
+* [x] `ui/editor.py` に `highlight_line(line_no)` メソッドを追加する
   - 完了条件: 指定行全体を薄い緑色でハイライトする（`QTextEdit.extraSelections()` を使用）
   - 完了条件: 既存の `AsmHighlighter` シンタックスハイライトと共存する
-* [ ] `ui/editor.py` に `clear_highlight()` メソッドを追加する
+* [x] `ui/editor.py` に `clear_highlight()` メソッドを追加する
 
 ## 8.2 win.py との連携
 
-* [ ] `win.py` の `_build()` で `address_map` を `self._address_map` に保存する
-* [ ] Step 後に `cpu.pc` → `address_map` → `highlight_line()` の連携を実装する
-* [ ] Run 後にハイライトを最終 pc 行に更新する
-* [ ] Reset / Build 時にハイライトをクリアする
+* [x] `win.py` の `_build()` で `address_map` を `self._address_map` に保存する
+* [x] Step 後に `cpu.pc` → `address_map` → `highlight_line()` の連携を実装する
+* [x] Run 後にハイライトを最終 pc 行に更新する
+* [x] Reset / Build 時にハイライトをクリアする
 
 ---
 

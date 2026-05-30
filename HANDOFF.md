@@ -270,14 +270,14 @@ AKDev と VS Code の関係は **Unity と VS Code のような関係**を目指
 HANDOFF.md を読んで現在の状態を確認してください。
 
 v0.1 / v0.2 / v0.3 は完了済みです。
-pytest 462 件全通過済み。
+pytest 476 件全通過済み。
 
 次は v0.4 Visual Debug Canvas の実装を続けます。
 CHECKLIST5.md 完了状況:
-- セクション 1〜8: 全完了済み（AK32命令拡張 / アセンブラ / Canvas UX / Grid Snap / Bus Connection / Wire Mode / Memory Viewer）
-- pytest 462 件全通過済み
+- セクション 1〜9: 全完了済み（AK32命令拡張 / アセンブラ / Canvas UX / Grid Snap / Bus Connection / Wire Mode / Memory Viewer / PC ハイライト）
+- pytest 476 件全通過済み
 
-次は CHECKLIST5.md セクション 9（PC ハイライト）から始めてください。
+次は CHECKLIST5.md セクション 10（Canvas Signal Overlay）から始めてください。
 ```
 
 ---
@@ -331,6 +331,32 @@ GUI 骨組み → Parts Library → Canvas → node_id 管理 → Properties →
 
 - `PATCH_PROJECT_DIALOG_ROADMAP.md` / `PATCH_PROJECT_DIALOG_CHECKLIST.md` を作成（Project Dialog / Save As パッチ計画）
 - `HANDOFF.md` を更新（現在の優先作業を Project Dialog パッチに変更）
+
+### セッション 37（2026-05-30）
+
+- CHECKLIST5.md セクション 9（PC ハイライト）を実装・完了:
+  - `ui/highlighter.py`: `attach_line_highlight()` を PC ハイライト対応に改修
+    - `_PC_LINE_BG = QColor("#ccffcc")` 定数を追加
+    - 戻り値として `set_pc_line(line_no: int | None)` callable を返すよう変更
+    - カーソル行ハイライトと PC 行ハイライトを同一 `setExtraSelections` 呼び出しでマージ
+    - `pc_state = [None]` クロージャで PC 行番号を管理
+  - `ui/editor.py`: `_TabInfo` に `set_pc_line = None` フィールドを追加
+  - `ui/editor.py`: `open_tab()` で `attach_line_highlight()` の戻り値を `info.set_pc_line` に保存
+  - `ui/editor.py`: `EditorTabs.highlight_line(line_no: int)` を追加（0-origin、範囲外でも安全）
+  - `ui/editor.py`: `EditorTabs.clear_highlight()` を追加
+  - `ui/win.py`: `from asm.asm import assemble` → `assemble_ex` に変更
+  - `ui/win.py`: `__init__` に `self._address_map: dict[int, int] = {}` を追加
+  - `ui/win.py`: `_build()` で `assemble_ex()` を使用、成功時に `self._address_map = address_map` 保存、失敗時 `= {}` クリア
+  - `ui/win.py`: `_build()` 成功・失敗後に `self._editor_tabs.clear_highlight()` を呼び出し
+  - `ui/win.py`: `_update_pc_highlight()` を追加（`address_map.get(cpu.pc)` → `highlight_line` / `clear_highlight`）
+  - `ui/win.py`: `_do_step()` 末尾に `_update_pc_highlight()` を追加
+  - `ui/win.py`: `_do_run()` の 3 つの終了点に `_update_pc_highlight()` を追加
+  - `ui/win.py`: `_do_reset()` 末尾に `clear_highlight()` を追加
+  - `tests/test_editor_highlight.py` を新規作成（14 件）:
+    - highlight_line/clear_highlight の無タブ/タブあり/範囲外/負値 テスト
+    - MainWin: _address_map 初期化/build成功後保存/build失敗後クリア/step/run/reset 無クラッシュテスト
+  - pytest 476 件全通過（既存 462 件 + 新規 14 件）
+  - CHECKLIST5.md セクション 9 を全 [x] に更新
 
 ### セッション 36（2026-05-30）
 
