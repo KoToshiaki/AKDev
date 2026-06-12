@@ -750,6 +750,137 @@ visual port を PartNode の辺上で対話的に動かせる。
 - 表示優先度（visual port）は **moving > hover > normal**。drop target highlight とは別状態。
 - **今回やらないこと**: 通常左ドラッグ移動 / 複数選択 / 削除 UI / rename / サイズ変更 / Undo。
 
+### Wire Style（PATCH_WIRE_STYLE_V05）
+
+選択中 wire ごとに色・太さを編集できる。kind の意味は変えず**表示だけ**を上書きする。
+
+| 保存キー | 内容 |
+|---|---|
+| `connection["style"]["color"]` | 線の色（任意、例 "#ffcc00"）。未設定は kind 色 |
+| `connection["style"]["width"]` | 描画ペン幅（任意、float）。未設定は kind 幅。`connection["width"]`（論理バス幅 bits）とは別物 |
+
+- style 未設定なら `style` キー自体を保存しない。export/import round-trip で維持。既存（style 無し）も読める。
+- `ConnectionLine.apply_style(color, width)` が base pen を作り直す。表示優先度は
+  **selected > active > hover > custom style(color/width) > kind default**（`_apply_pen()`）。
+  hover/active は custom 色を活かして明度・太さで強調、selected は最強の白で示す。
+- Canvas API: `set_connection_style(conn_id, color=None, width=None)`（color="" で色クリア、
+  None は当該属性を変更しない）/ `reset_connection_style(conn_id)` / `get_connection(conn_id)`。
+  存在しない conn は False。変更後も selected/hover を維持。
+- wire 選択時、`wire_selected(conn)` / `wire_selection_cleared()` で MainWin へ通知し、
+  Properties を **Wire セクション**へ切替（node 選択 Properties は不変）。wire 選択時は node 選択をクリア。
+- Properties（Wire）表示: id / kind / from(node・port・vp) / to(...) / color / width。
+  編集: color パレット（〜12 色）+ Default / width プリセット（1/2/3/5）/ Reset Style。
+  part 用パレットと wire 用パレットは別 swatch・別ハンドラ。
+- wire 右クリックに「Delete Wire」（既存）+「Reset Wire Style」。色変更は Properties 主導。
+- 保存はノード色変更と同じ persist 導線（`_persist_system`、project open 時）に乗せる。
+- **今回やらないこと**: kind 本格編集 / 意味変更 / label / rename / constraint / Undo。
+
+---
+
+## 11-K. Program / Sources 割り当て（PATCH_PART_PROGRAM_ASSIGN_V05）
+
+> **今回はテスト用の最小実装。** ただし保存形式と API は将来の正式実装（内蔵エディタ /
+> Build Graph / Canvas からの CPU・ROM・RAM 自動解決 / 実機書き込み）へ拡張しやすくする。
+> **固定 hello.asm 専用実装ではない**（割り当てを優先順位で解決する）。
+
+Canvas 上のパーツに外部ソースファイル（asm/hdl/rom）を割り当て、Build/Run が参照する。
+
+### 保存形式（system.json の parts エントリ内、今回は文字列 path 形式）
+
+```json
+{ "sources": { "asm": "src/hello.asm", "hdl": null } }
+```
+
+- `asm` / `hdl` / `rom`。`rom` は設定時のみ出現（既定 `{"asm":None,"hdl":None}` は変更しない）。
+- 既存プロジェクト（sources 無し）でも読める。export/import round-trip で維持。可能ならルート相対パス。
+- **将来拡張**: 値を dict（`{"path","entry","target","top"}`）へ拡張可能。読み出しは
+  `_source_path()` が str/dict 両対応で path を取り出すため移行時に壊れにくい。
+
+### Canvas API
+
+`set_node_source(node_id, type, path)` / `clear_node_source` / `node_sources` /
+`node_source`（str/dict 両対応）/ `resolve_program_source(type, prefer_node_id)` /
+`selected_node_id`。node 無しは False。
+
+### Properties（Program / Sources）
+
+- node 選択時のみ表示（wire 選択時は Wire 優先、未選択は従来どおり）。
+- asm/hdl/rom の現在値 + Set…/Clear/Open（rom は Set/Clear のみ）。`QFileDialog` で選択。
+- signal: `source_set_requested` / `source_clear_requested` / `source_open_requested`。
+- Open は既存 `_on_open_tab`（割り当て済みは直接開く）に委譲。未設定 Open は "No ASM source assigned"。
+
+### 右クリック
+
+- 既存「プログラムを開く」（割り当て asm を直接開く）を維持 +「Set ASM Source…」を追加。
+
+### Build / Run 接続（優先順位）
+
+`_resolve_assigned_asm_path()` →（1）選択中 node の asm →（2）CPU カテゴリ part の asm →
+（3）任意 node の asm。`_build()` が割り当てを優先、無ければ**既存のエディタタブ Build へフォールバック**
+（既存 hello.asm headless 検証を壊さない）。解決パスは存在チェック付き。Run は既存 `_do_run`。
+
+### 将来課題
+
+dict 形式拡張 / Canvas 配線からの Build Graph 自動解決 / 内蔵エディタ / ROM イメージ生成 /
+実機書き込み / プロジェクト外パスの移植性。
+
+---
+
+## 11-L. Write Program to Circuit（PATCH_CIRCUIT_WRITE_RUN_HELLO_V05）
+
+> **「書き込み」は仮想回路へのロード**（AKDev 内の仮想 CPU/RAM へ assemble してロード）であり、
+> **FPGA 実機書き込みではない**。テスト用の最小実装だが、将来の Build Graph / ROM イメージ /
+> 実機書き込みへ差し替えやすい構造（`loaded_program` を dict で整理）。
+> **固定 hello_world.asm 専用ではない**（`sources.asm` 割り当てを優先順位で解決）。
+
+### ゴール
+
+CPU パーツに `tests/test/hello_world.asm` を割り当て → Run タブ `Write Program` →
+`Run` → UART Console に `Hello World !` を表示する。
+
+### テスト用 ASM
+
+- `tests/test/hello_world.asm`（新規）。既存 `src/hello.asm` と同じ命令体系・UART 出力方式
+  （UART base 0x100 へ LDI+OUT で 1 文字ずつ）で `Hello World !\n` を出力。
+  既存アセンブラで assemble・既存 emulator で Run 可能。
+
+### Write Program
+
+- Run リボンタブに `Write Program` ボタン（実機書き込みではない旨を tooltip 表示）。
+- `MainWin.write_program(prefer_node_id=None)`: ASM source を優先順位で解決 → 存在チェック →
+  `_assemble_and_load`（既存 Build と同じ assemble+RAM ロード）→ `loaded_program` 設定 → ログ。
+- ログ: 成功 `Program written to circuit: <node_id> <- <path>` /
+  `No ASM source assigned` / `Program source not found: ...` / assemble 失敗。
+- 右クリックにも「Write Program to Circuit」（`write_program_requested` signal）。
+
+### ASM source 解決の優先順位（11-K と同じ）
+
+1. 選択中 PartNode の `sources.asm` → 2. CPU カテゴリ part → 3. 任意 node →
+4. 無ければ既存エディタタブ Build（フォールバック）。`Canvas.resolve_program_node()` が
+(node_id, path) を返し、`resolve_program_source` はその path を返す。
+
+### loaded_program（セッション中の runtime 状態、今回は永続化しない）
+
+```json
+{ "loaded_program": { "source_type": "asm", "path": "tests/test/hello_world.asm",
+                      "target_node_id": "node_0001", "status": "loaded" } }
+```
+
+### Run 接続
+
+- `Write Program` 成功で RAM/CPU はロード済み。続けて `Run`（既存 `_do_run`）で実行され UART に出力。
+- 既存 `Build → Run` 経路・hello.asm headless（UART "Hi"）は不変。
+
+### Properties
+
+- Program / Sources セクションに Loaded 状態（`Loaded: Yes/No` / Loaded Target / Loaded Program）。
+  未ロードは `Loaded: No`。Wire Properties / Part Visual パレットは不変。
+
+### 将来課題
+
+`loaded_program` の system.json 永続化 / Build Graph（配線解決）/ ROM イメージ生成 / 実機書き込み /
+複数 CPU・複数プログラム。
+
 ---
 
 ## 12. ユーザー UI ラフ反映欄

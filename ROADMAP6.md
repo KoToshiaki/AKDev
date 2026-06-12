@@ -286,6 +286,60 @@ PowerPoint のように、目的別にタブを分ける。
 
 ---
 
+## v0.5 PATCH_WIRE_STYLE_V05（Wire Style）
+
+> 選択中 wire の色・太さを編集できるようにする（kind の意味は不変、表示のみ）。
+> 設計書: `PATCH_WIRE_STYLE_V05_ROADMAP.md` ／ 進捗: `PATCH_WIRE_STYLE_V05_CHECKLIST.md`。
+> 仕様: `UI_SPEC_V05.md` 11-J（Wire Style）。
+
+| 項目 | 概要 |
+|---|---|
+| データ | connection に任意 `style{color,width}`。未設定は kind 既定。export/import 維持・空は保存しない |
+| 描画 | `ConnectionLine.apply_style`。優先度 selected > active > hover > custom style > kind default |
+| Canvas API | `set_connection_style` / `reset_connection_style` / `get_connection`。selected/hover 維持 |
+| Properties | wire 選択で Wire セクション（info + 色パレット + width + Reset）。`wire_selected`/`wire_selection_cleared` 通知 |
+| 右クリック | 「Delete Wire」+「Reset Wire Style」。色変更は Properties 主導 |
+| 範囲外 | kind 本格編集 / 意味変更 / label / rename / constraint / Undo はやらない |
+
+---
+
+## v0.5 PATCH_PART_PROGRAM_ASSIGN_V05（Program / Sources 割り当て）
+
+> Canvas 上のパーツに外部ソース（asm/hdl/rom）を割り当て、Build/Run が参照する。
+> **テスト用の最小実装**だが、保存形式と API は将来の正式実装へ拡張しやすくする。固定 hello.asm 専用ではない。
+> 設計書: `PATCH_PART_PROGRAM_ASSIGN_V05_ROADMAP.md` ／ 進捗: `PATCH_PART_PROGRAM_ASSIGN_V05_CHECKLIST.md`。
+> 仕様: `UI_SPEC_V05.md` 11-K。
+
+| 項目 | 概要 |
+|---|---|
+| データ | parts エントリ内 `sources{asm,hdl,rom}`（文字列 path、将来 dict 拡張可）。既定 `{asm,hdl}` は不変 |
+| Canvas API | `set/clear_node_source` / `node_sources` / `node_source` / `resolve_program_source` / `selected_node_id` |
+| Properties | node 選択時 Program セクション（Set/Clear/Open）。signal 3 種 |
+| 右クリック | 「プログラムを開く」維持 +「Set ASM Source…」追加 |
+| Build/Run | 選択 > CPU > 任意 の優先順で割り当て asm を Build。無ければ既存タブ Build へフォールバック |
+| 将来 | dict 形式 / Build Graph 自動解決 / 内蔵エディタ / 実機書き込み |
+
+---
+
+## v0.5 PATCH_CIRCUIT_WRITE_RUN_HELLO_V05（Write Program to Circuit）
+
+> CPU パーツに割り当てた ASM を**仮想回路へ書き込み**（実機書き込みではない）、Run で UART に
+> `Hello World !` を表示する。**テスト用最小実装**だが将来の Build Graph / ROM / 実機書き込みへ拡張可。
+> **固定 hello_world.asm 専用ではない**（`sources.asm` 割り当てを優先順位で解決）。
+> 設計書: `PATCH_CIRCUIT_WRITE_RUN_HELLO_V05_ROADMAP.md` ／ 進捗: `..._CHECKLIST.md`。
+> 仕様: `UI_SPEC_V05.md` 11-L。
+
+| 項目 | 概要 |
+|---|---|
+| テスト ASM | `tests/test/hello_world.asm`（既存命令体系で `Hello World !\n` 出力）|
+| Write Program | Run タブのボタン + 右クリック。`write_program` が解決→assemble→RAM/CPU ロード |
+| loaded_program | `{source_type,path,target_node_id,status}`（セッション中、今回は永続化しない）|
+| Run | Write 後の RAM を既存 `_do_run` で実行 → UART `Hello World !` |
+| Properties | Loaded 状態表示（Yes/No / Target / Program）|
+| 互換 | 既存 Build/Run・hello.asm headless("Hi")・Program/Sources・Wire Style は不変 |
+
+---
+
 ## v0.5 でやらないこと
 
 | 項目 | 理由 |

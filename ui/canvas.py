@@ -190,6 +190,24 @@ class ConnectionLine(QGraphicsPathItem):
     def is_selected(self) -> bool:
         return self._selected
 
+    def apply_style(self, color: str = "", width=None) -> None:
+        """Rebuild the base pen from a per-connection style (PATCH_WIRE_STYLE_V05).
+
+        color/width fall back to the kind defaults when empty/None. The
+        selected/active/hover overlay is re-applied on top, so custom colors
+        show through hover/active while selection stays clearly marked.
+        """
+        c = QColor(color) if color else QColor(_KIND_COLORS.get(self._kind, "#aaaaaa"))
+        w = float(width) if width is not None else _KIND_PEN_WIDTH.get(self._kind, 1.5)
+        self._base_pen = QPen(c, w)
+        self._apply_pen()
+
+    def base_color(self) -> str:
+        return self._base_pen.color().name()
+
+    def base_width(self) -> float:
+        return self._base_pen.widthF()
+
     def update_route(self, points: list) -> None:
         """Draw straight segments through the given corner points.
 
@@ -530,6 +548,10 @@ class Canvas(QGraphicsView):
     selection_changed  = Signal(list)              # list[PartNode]
     tab_open_requested = Signal(dict, str, str)   # (part, node_id, ext)
     mode_changed       = Signal(str)              # "wire" | "design"
+    wire_selected         = Signal(dict)          # connection dict (PATCH_WIRE_STYLE_V05)
+    wire_selection_cleared = Signal()             # no wire selected
+    set_source_requested  = Signal(str, str)      # (node_id, source_type) PATCH_PART_PROGRAM_ASSIGN_V05
+    write_program_requested = Signal(str)         # (node_id) PATCH_CIRCUIT_WRITE_RUN_HELLO_V05
 
     def __init__(self, log_fn=None):
         super().__init__()
@@ -614,6 +636,11 @@ class Canvas(QGraphicsView):
             conn.get("kind", "bus"),
             conn.get("color", ""),
         )
+        # Per-connection visual style (PATCH_WIRE_STYLE_V05) wins over the legacy
+        # top-level color key; both fall back to the kind default.
+        style = conn.get("style") or {}
+        line.apply_style(style.get("color", "") or conn.get("color", ""),
+                         style.get("width"))
         self.scene().addItem(line)
         return line
 
@@ -997,9 +1024,65 @@ class Canvas(QGraphicsView):
         if new is not None:
             new.set_selected(True)
         self._selected_conn_id = conn_id
+        # Notify (PATCH_WIRE_STYLE_V05) so Properties can show/clear wire info.
+        conn = self.get_connection(conn_id) if conn_id else None
+        if conn is not None:
+            self.wire_selected.emit(conn)
+        else:
+            self.wire_selection_cleared.emit()
 
     def selected_conn_id(self) -> "str | None":
         return self._selected_conn_id
+
+    # -------------------------------------------------- wire style (PATCH_WIRE_STYLE_V05)
+
+    def get_connection(self, conn_id: str) -> "dict | None":
+        """Return the connection dict with the given id, or None."""
+        return next((c for c in self._connections if c["id"] == conn_id), None)
+
+    def set_connection_style(self, conn_id: str,
+                             color: "str | None" = None,
+                             width: "float | None" = None) -> bool:
+        """Set per-connection visual style. color="" clears color; None keeps attr.
+
+        Returns False if the connection does not exist. Selected/hover state is
+        preserved (apply_style re-applies the overlay).
+        """
+        conn = self.get_connection(conn_id)
+        if conn is None:
+            return False
+        style = dict(conn.get("style") or {})
+        if color is not None:
+            if color == "":
+                style.pop("color", None)
+            else:
+                style["color"] = color
+        if width is not None:
+            style["width"] = float(width)
+        if style:
+            conn["style"] = style
+        else:
+            conn.pop("style", None)
+        line = self._conn_items.get(conn_id)
+        if line is not None:
+            s = conn.get("style") or {}
+            line.apply_style(s.get("color", ""), s.get("width"))
+        if conn_id == self._selected_conn_id:
+            self.wire_selected.emit(conn)   # refresh Properties
+        return True
+
+    def reset_connection_style(self, conn_id: str) -> bool:
+        """Remove a connection's custom style (revert to kind defaults)."""
+        conn = self.get_connection(conn_id)
+        if conn is None:
+            return False
+        conn.pop("style", None)
+        line = self._conn_items.get(conn_id)
+        if line is not None:
+            line.apply_style("", None)
+        if conn_id == self._selected_conn_id:
+            self.wire_selected.emit(conn)
+        return True
 
     def _remove_connection(self, conn_id: str) -> bool:
         """Single source of truth for removing one connection (data + line item).
@@ -1296,6 +1379,76 @@ class Canvas(QGraphicsView):
         )
         return True
 
+    # -------------------------------------------- program sources (PATCH_PART_PROGRAM_ASSIGN_V05)
+
+    @staticmethod
+    def _source_path(val) -> "str | None":
+        """Extract a path string from a source value (str now, dict in future)."""
+        if isinstance(val, dict):
+            return val.get("path")
+        return val or None
+
+    def set_node_source(self, node_id: str, source_type: str,
+                        path: "str | None") -> bool:
+        """Assign (or clear, when path is empty/None) a source file to a part."""
+        node = self.get_node(node_id)
+        if node is None:
+            return False
+        node.set_source(source_type, path or None)
+        self._log(
+            f"Source: [{node_id}] {source_type} -> {path}" if path
+            else f"Source: [{node_id}] {source_type} cleared"
+        )
+        return True
+
+    def clear_node_source(self, node_id: str, source_type: str) -> bool:
+        """Clear a part's source assignment for the given type."""
+        return self.set_node_source(node_id, source_type, None)
+
+    def node_sources(self, node_id: str) -> dict:
+        """Return a copy of a node's sources dict (empty if node missing)."""
+        node = self.get_node(node_id)
+        return dict(node.sources()) if node is not None else {}
+
+    def node_source(self, node_id: str, source_type: str) -> "str | None":
+        """Return the resolved path string for one source type, or None."""
+        node = self.get_node(node_id)
+        if node is None:
+            return None
+        return self._source_path(node.sources().get(source_type))
+
+    def selected_node_id(self) -> "str | None":
+        """Return the single selected PartNode id, or None (0 or many selected)."""
+        nodes = [i for i in self.scene().selectedItems() if isinstance(i, PartNode)]
+        return nodes[0].node_id() if len(nodes) == 1 else None
+
+    def resolve_program_node(self, source_type: str = "asm",
+                             prefer_node_id: "str | None" = None) -> "tuple | None":
+        """Pick (node_id, path) by priority (PATCH_PART_PROGRAM_ASSIGN_V05).
+
+        1. preferred (e.g. selected) node, 2. first CPU-category part,
+        3. first node with this source. Returns None if none assigned.
+        """
+        if prefer_node_id is None:
+            prefer_node_id = self.selected_node_id()
+        if prefer_node_id:
+            p = self.node_source(prefer_node_id, source_type)
+            if p:
+                return (prefer_node_id, p)
+        cpu_nodes = [n for n in self.get_all_nodes()
+                     if n.part().get("category") == "cpu"]
+        for n in cpu_nodes + self.get_all_nodes():
+            p = self._source_path(n.sources().get(source_type))
+            if p:
+                return (n.node_id(), p)
+        return None
+
+    def resolve_program_source(self, source_type: str = "asm",
+                               prefer_node_id: "str | None" = None) -> "str | None":
+        """Return just the resolved source path (see resolve_program_node)."""
+        r = self.resolve_program_node(source_type, prefer_node_id)
+        return r[1] if r is not None else None
+
     def export_parts(self) -> list[dict]:
         """Return all canvas nodes as a list of dicts for system.json serialisation."""
         result = []
@@ -1552,6 +1705,7 @@ class Canvas(QGraphicsView):
                 if not isinstance(item, PartNode):
                     conn = self._connection_at(scene_pos)
                     if conn is not None:
+                        self.scene().clearSelection()   # wire takes over Properties
                         self._set_selected_conn(conn.conn_id())
                         event.accept()
                         return
@@ -1717,15 +1871,19 @@ class Canvas(QGraphicsView):
 
         # Design mode
         if not isinstance(item, PartNode):
-            # Right-click near a wire: select it and offer Delete Wire.
+            # Right-click near a wire: select it and offer wire actions.
             conn = self._connection_at(scene_pos)
             if conn is not None:
+                self.scene().clearSelection()   # wire takes over Properties
                 self._set_selected_conn(conn.conn_id())
                 menu = QMenu(self)
-                a_del = menu.addAction("Delete Wire")
+                a_del   = menu.addAction("Delete Wire")
+                a_reset = menu.addAction("Reset Wire Style")
                 chosen = menu.exec(event.globalPos())
                 if chosen is a_del:
                     self._remove_connection(conn.conn_id())
+                elif chosen is a_reset:
+                    self.reset_connection_style(conn.conn_id())
                 return
             super().contextMenuEvent(event)
             return
@@ -1735,6 +1893,8 @@ class Canvas(QGraphicsView):
         menu.addAction("接続を開始")
         menu.addSeparator()
         menu.addAction("プログラムを開く")
+        menu.addAction("Set ASM Source...")
+        menu.addAction("Write Program to Circuit")
         menu.addAction("HDLを開く")
         menu.addSeparator()
         menu.addAction("設定")
@@ -1761,6 +1921,10 @@ class Canvas(QGraphicsView):
             self._remove_node(item.node_id())
         elif label == "複製":
             self._clone_node(item)
+        elif label == "Set ASM Source...":
+            self.set_source_requested.emit(item.node_id(), "asm")
+        elif label == "Write Program to Circuit":
+            self.write_program_requested.emit(item.node_id())
         elif label == "プログラムを開く":
             self.tab_open_requested.emit(item.part(), item.node_id(), "asm")
         elif label == "HDLを開く":

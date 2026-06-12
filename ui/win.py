@@ -54,6 +54,8 @@ class MainWin(QMainWindow):
         self.resize(1280, 800)
         self._project_root: Path | None = None
         self._address_map: dict[int, int] = {}
+        # Runtime program loaded into the virtual circuit (PATCH_CIRCUIT_WRITE_RUN_HELLO_V05).
+        self._loaded_program: "dict | None" = None
         self._setup_log()            # must be first — others write to self._log
         self._setup_console()        # Console: program/run output (tabified with Log)
         self._setup_uart_console()   # UART Console panel (tabified with Log)
@@ -66,6 +68,10 @@ class MainWin(QMainWindow):
         self._setup_register_view()  # Register View (tabified with Properties)
         self._canvas.selection_changed.connect(self._on_canvas_selection)
         self._canvas.tab_open_requested.connect(self._on_open_tab)
+        self._canvas.wire_selected.connect(self._on_wire_selected)
+        self._canvas.wire_selection_cleared.connect(self._on_wire_selection_cleared)
+        self._canvas.set_source_requested.connect(self._on_source_set)
+        self._canvas.write_program_requested.connect(self.write_program)
         self._setup_menu()           # creates self._a_new/_a_open/_a_save/etc.
         self._setup_toolbar()        # reuses those actions
         self._update_register_view() # populate with initial CPU state
@@ -262,6 +268,12 @@ class MainWin(QMainWindow):
         self._props_dock.setMinimumWidth(180)
         self._prop_panel = PropPanel()
         self._prop_panel.color_changed.connect(self._on_part_color_changed)
+        self._prop_panel.wire_color_changed.connect(self._on_wire_color_changed)
+        self._prop_panel.wire_width_changed.connect(self._on_wire_width_changed)
+        self._prop_panel.wire_style_reset.connect(self._on_wire_style_reset)
+        self._prop_panel.source_set_requested.connect(self._on_source_set)
+        self._prop_panel.source_clear_requested.connect(self._on_source_clear)
+        self._prop_panel.source_open_requested.connect(self._on_source_open)
         self._props_dock.setWidget(self._prop_panel)
         self.addDockWidget(Qt.RightDockWidgetArea, self._props_dock)
 
@@ -269,6 +281,110 @@ class MainWin(QMainWindow):
         """PATCH_PART_VISUAL_V05: apply a Properties color pick to the node + save."""
         if self._canvas.set_node_color(node_id, color) and self._project_root is not None:
             self._persist_system()
+
+    # ------------------------------------------------- wire style (PATCH_WIRE_STYLE_V05)
+
+    def _on_wire_selected(self, conn: dict):
+        self._prop_panel.show_wire(conn)
+
+    def _on_wire_selection_cleared(self):
+        self._prop_panel.show_none()
+
+    def _on_wire_color_changed(self, conn_id: str, color: str):
+        if self._canvas.set_connection_style(conn_id, color=color) and self._project_root is not None:
+            self._persist_system()
+
+    def _on_wire_width_changed(self, conn_id: str, width: float):
+        if self._canvas.set_connection_style(conn_id, width=width) and self._project_root is not None:
+            self._persist_system()
+
+    def _on_wire_style_reset(self, conn_id: str):
+        if self._canvas.reset_connection_style(conn_id) and self._project_root is not None:
+            self._persist_system()
+
+    # ----------------------------------------- program sources (PATCH_PART_PROGRAM_ASSIGN_V05)
+
+    _SRC_FILTER = {
+        "asm": "ASM (*.asm *.s);;All files (*)",
+        "hdl": "HDL (*.v *.sv *.vhdl *.vh);;All files (*)",
+        "rom": "ROM (*.bin *.hex *.rom);;All files (*)",
+    }
+
+    def _rel_to_root(self, path: str) -> str:
+        """Return a project-root-relative posix path when possible, else absolute."""
+        p = Path(path)
+        if self._project_root is not None:
+            try:
+                return p.resolve().relative_to(self._project_root.resolve()).as_posix()
+            except ValueError:
+                pass  # outside the project — keep absolute (future: portability)
+        return p.as_posix()
+
+    def _loaded_for(self, node_id: str) -> "dict | None":
+        """Return the loaded_program dict if it targets node_id, else None."""
+        lp = self._loaded_program
+        if lp and lp.get("target_node_id") == node_id:
+            return lp
+        return None
+
+    def _refresh_node_properties(self, node_id: str):
+        node = self._canvas.get_node(node_id)
+        if node is not None:
+            self._prop_panel.show_part(
+                node.part(), node_id, self._canvas.node_sources(node_id),
+                self._loaded_for(node_id),
+            )
+
+    def _on_source_set(self, node_id: str, source_type: str):
+        start = str(self._project_root) if self._project_root is not None else ""
+        path, _ = QFileDialog.getOpenFileName(
+            self, f"Set {source_type.upper()} Source", start,
+            self._SRC_FILTER.get(source_type, "All files (*)"),
+        )
+        if not path:
+            return
+        rel = self._rel_to_root(path)
+        if self._canvas.set_node_source(node_id, source_type, rel):
+            self._log.append(f"Source set: [{node_id}] {source_type} = {rel}")
+            if self._project_root is not None:
+                self._persist_system()
+            self._refresh_node_properties(node_id)
+
+    def _on_source_clear(self, node_id: str, source_type: str):
+        if self._canvas.clear_node_source(node_id, source_type):
+            self._log.append(f"Source cleared: [{node_id}] {source_type}")
+            if self._project_root is not None:
+                self._persist_system()
+            self._refresh_node_properties(node_id)
+
+    def _on_source_open(self, node_id: str, source_type: str):
+        src = self._canvas.node_source(node_id, source_type)
+        if not src:
+            self._log.append(f"No {source_type.upper()} source assigned for [{node_id}]")
+            return
+        node = self._canvas.get_node(node_id)
+        if node is None:
+            return
+        ext = {"asm": "asm", "hdl": "v"}.get(source_type, source_type)
+        self._on_open_tab(node.part(), node_id, ext)
+
+    def _resolve_source_path(self, rel: "str | None") -> "Path | None":
+        """Resolve a source path against the project root; None if missing/absent."""
+        if not rel:
+            return None
+        p = Path(rel)
+        path = p if p.is_absolute() else (
+            (self._project_root / rel) if self._project_root is not None else p
+        )
+        if not path.exists():
+            self._log.append(f"Source not found: {path.as_posix()}")
+            return None
+        return path
+
+    def _resolve_assigned_asm_path(self) -> "Path | None":
+        """Pick an assigned asm by priority (selected > CPU > any) and resolve it."""
+        rel = self._canvas.resolve_program_source("asm")
+        return self._resolve_source_path(rel)
 
     def _setup_register_view(self):
         dock = QDockWidget("Register View", self)
@@ -294,10 +410,17 @@ class MainWin(QMainWindow):
 
     def _on_canvas_selection(self, nodes: list):
         if not nodes:
+            # Keep the Wire view if a wire is selected (node selection was cleared
+            # so the wire could take over Properties — PATCH_WIRE_STYLE_V05).
+            if self._canvas.selected_conn_id() is not None:
+                return
             self._prop_panel.show_none()
         elif len(nodes) == 1:
             n = nodes[0]
-            self._prop_panel.show_part(n.part(), n.node_id())
+            self._prop_panel.show_part(
+                n.part(), n.node_id(), self._canvas.node_sources(n.node_id()),
+                self._loaded_for(n.node_id()),
+            )
         else:
             self._prop_panel.show_multi(len(nodes))
 
@@ -451,42 +574,64 @@ class MainWin(QMainWindow):
         self._log.append(f"Saved project as: {new_root.as_posix()}")
 
     def _build(self):
+        root = self._project_root
+        # PATCH_PART_PROGRAM_ASSIGN_V05: prefer an asm assigned to a part (priority:
+        # selected node > CPU part > any). Falls back to the editor-tab build when
+        # nothing is assigned, so the existing flow / hello.asm path is unchanged.
+        if root is not None:
+            asm_path = self._resolve_assigned_asm_path()
+            if asm_path is not None:
+                try:
+                    text = asm_path.read_text(encoding="utf-8")
+                except OSError as exc:
+                    self._log.append(f"Build: cannot read assigned asm: {exc}")
+                    return
+                self._log.append(f"Build: using assigned asm {asm_path.as_posix()}")
+                self._assemble_and_load(text, asm_path.name, root)
+                return
+
         tab = self._editor_tabs.current_tab_info()
         if tab is None or tab.ext != "asm":
             self._log.append("Build: current tab is not an asm file")
             return
-        root = self._project_root
         if root is None:
             self._log.append("Build: New Project / Open Project を先に行ってください")
             return
+        self._assemble_and_load(tab.text, tab.source_name, root)
 
+    def _assemble_and_load(self, text: str, source_name: str, root: "Path"):
+        """Assemble asm text, write the .bin, and load it into simulator RAM.
+
+        Shared by the editor-tab build and the assigned-part-source build
+        (PATCH_PART_PROGRAM_ASSIGN_V05).
+        """
         # Resolve build type from target.json (falls back to AK32 Baremetal default).
         try:
             target_cfg = load_target(root)
         except Exception as exc:
             self._log.append(f"Build: failed to read target.json: {exc}")
-            return
+            return False
         build_cfg  = target_cfg.get("build", {})
         build_type = build_cfg.get("type", "internal_assembler")
 
         if build_type == "external_command":
             self._log.append("Build: external_command is not implemented yet")
-            return
+            return False
         if build_type != "internal_assembler":
             self._log.append(f"Build: unsupported build type: {build_type}")
-            return
+            return False
 
         try:
-            binary, address_map = assemble_ex(tab.text)
+            binary, address_map = assemble_ex(text)
         except AsmError as exc:
             self._log.append(f"Build FAILED: {exc}")
             self._address_map = {}
             self._editor_tabs.clear_highlight()
-            return
+            return False
 
         out_dir = root / "build" / "out"
         out_dir.mkdir(parents=True, exist_ok=True)
-        bin_name = Path(tab.source_name).stem + ".bin"
+        bin_name = Path(source_name).stem + ".bin"
         out_path = out_dir / bin_name
         out_path.write_bytes(binary)
         self._log.append(
@@ -511,6 +656,51 @@ class MainWin(QMainWindow):
         self._update_memory_viewer()
         self._editor_tabs.clear_highlight()
         self._canvas.clear_signal_overlay()
+        return True
+
+    # ------------------------------------- write program to circuit (PATCH_CIRCUIT_WRITE_RUN_HELLO_V05)
+
+    def write_program(self, prefer_node_id: "str | None" = None) -> bool:
+        """Assemble the assigned ASM and load it into the virtual circuit (RAM/CPU).
+
+        "Write" here means loading into AKDev's virtual CPU/RAM — NOT an FPGA
+        flash. Source is resolved by priority (selected > CPU > any assigned),
+        not a fixed file. Returns True on success.
+        """
+        root = self._project_root
+        if root is None:
+            self._log.append("Write Program: New Project / Open Project を先に行ってください")
+            return False
+        resolved = self._canvas.resolve_program_node("asm", prefer_node_id)
+        if resolved is None:
+            self._log.append("No ASM source assigned")
+            return False
+        node_id, rel = resolved
+        path = self._resolve_source_path(rel)
+        if path is None:
+            self._log.append(f"Program source not found: {rel}")
+            return False
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            self._log.append(f"Write Program: cannot read source: {exc}")
+            return False
+        if not self._assemble_and_load(text, path.name, root):
+            self._log.append(f"Assemble failed: {rel}")
+            self._loaded_program = None
+            return False
+        self._loaded_program = {
+            "source_type":    "asm",
+            "path":           rel,
+            "target_node_id": node_id,
+            "status":         "loaded",
+        }
+        self._log.append(f"Program written to circuit: {node_id} <- {rel}")
+        self._refresh_node_properties(node_id)
+        return True
+
+    def loaded_program(self) -> "dict | None":
+        return self._loaded_program
 
     # ------------------------------------------------------------------ run controls
 
@@ -701,6 +891,12 @@ class MainWin(QMainWindow):
         self._a_step.setShortcut(QKeySequence("F10"))
         self._a_step.triggered.connect(self._do_step)
 
+        self._a_write_program = QAction("Write Program", self)
+        self._a_write_program.setToolTip(
+            "割り当て ASM を仮想回路（CPU/RAM）へ書き込む（実機書き込みではない）"
+        )
+        self._a_write_program.triggered.connect(lambda: self.write_program())
+
         self._a_run = QAction("Run", self)
         self._a_run.setShortcut(QKeySequence("Ctrl+R"))
         self._a_run.triggered.connect(self._do_run)
@@ -777,7 +973,8 @@ class MainWin(QMainWindow):
             self._a_wire_mode, self._a_cancel_wire,
         ])
         self._ribbon.add_page("Run", [
-            self._a_build, self._a_run, self._a_step, self._a_reset, self._a_pause,
+            self._a_build, self._a_write_program,
+            self._a_run, self._a_step, self._a_reset, self._a_pause,
         ])
         self._ribbon.add_page("View", [            # H: no Zoom In/Out (wheel zoom stays)
             self._a_grid, self._a_snap,

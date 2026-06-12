@@ -1,6 +1,207 @@
 # AKDev 引き継ぎメモ
 
-更新日: 2026-06-13（PATCH_VISUAL_PORT_MOVE_V05 — Visual Port Move）
+更新日: 2026-06-13（PATCH_CIRCUIT_WRITE_RUN_HELLO_V05 — Write Program to Circuit）
+
+---
+
+## 現在の状況（PATCH_CIRCUIT_WRITE_RUN_HELLO_V05 — Write Program to Circuit）
+
+**フェーズ: v0.5（進行中）。CPU パーツに割り当てた ASM を仮想回路へ書き込み、Run で UART に `Hello World !` を表示。**
+
+> **「書き込み」は仮想回路（仮想 CPU/RAM）へのロードであり、FPGA 実機書き込みではない。**
+> テスト用の最小実装だが、将来の Build Graph / ROM イメージ / 実機書き込みへ差し替えやすい構造
+> （`loaded_program` を dict で整理）。**固定 hello_world.asm 専用ではなく**、`sources.asm` 割り当てを
+> 優先順位で解決する。
+
+### 作成したテスト用 ASM
+
+- `tests/test/hello_world.asm`（新規）— 既存 `src/hello.asm` と同じ命令体系・UART 出力方式
+  （UART base 0x100 へ LDI+OUT で 1 文字ずつ）で `Hello World !\n`（120 bytes）を出力。
+  emulator 検証: UART 出力 `'Hello World !\n'` ✅。
+
+### 完了した作業
+
+| 項目 | 内容 |
+|---|---|
+| Write Program | Run リボンタブに `Write Program` ボタン + 右クリック「Write Program to Circuit」。`MainWin.write_program(prefer_node_id=None)` が ASM を優先順位解決→存在チェック→assemble→既存 RAM/CPU へロード |
+| loaded_program | セッション中 runtime 状態 `{source_type,path,target_node_id,status}`（今回は system.json へ永続化しない、将来保存可）|
+| Canvas API | `resolve_program_node()`（(node_id,path) を優先順位で返す）を追加、`resolve_program_source` はこれ経由に（戻り値不変）。signal `write_program_requested` |
+| Build 共通化 | `_assemble_and_load` を bool 返却へ拡張（`_build` は戻り値不使用で不変）|
+| Run 接続 | Write 成功で RAM/CPU ロード済み → 既存 `_do_run` で実行 → UART `Hello World !` |
+| Properties | Program セクションに Loaded 状態（`Loaded: Yes/No` / Loaded Target / Loaded Program）。未ロードは No |
+| ログ | 成功 `Program written to circuit: <node> <- <path>` / `No ASM source assigned` / `Program source not found: ...` |
+| 互換 | 既存 Build/Run・hello.asm headless("Hi")・Program/Sources 割り当て・Wire Style・Wiring・Properties は不変 |
+
+### 作成したパッチ文書
+
+- `PATCH_CIRCUIT_WRITE_RUN_HELLO_V05_ROADMAP.md` / `..._CHECKLIST.md`
+
+### loaded_program のデータ構造
+
+```json
+{ "source_type": "asm", "path": "tests/test/hello_world.asm",
+  "target_node_id": "node_0001", "status": "loaded" }
+```
+
+### ASM source 解決の優先順位
+
+1. 選択中 PartNode の `sources.asm` → 2. CPU カテゴリ part → 3. 任意 node → 4. 既存タブ Build。
+
+### `Hello World !` の実行確認結果
+
+- emulator 単体: `tests/test/hello_world.asm` → UART `'Hello World !\n'` ✅
+- MainWin: CPU に割り当て → `write_program()` → `_do_run()` → UART に `Hello World !` 含む ✅
+
+### テスト結果
+
+- `pytest tests/` **741 件全通過**（PATCH_PART_PROGRAM_ASSIGN_V05 完了時 729 → +12）
+- 新規 `tests/test_circuit_write_run_hello_v05.py`（12 件）
+- 既存 729 件は無改変で通過（既存 Build/Run、hello.asm "Hi"、Program/Sources、Wire Style）
+
+### まだ残っている問題（将来）
+
+- `loaded_program` の system.json 永続化は未実装（今回はセッション中のみ）。
+- Build Graph 本実装 / Canvas 配線からの CPU・RAM・ROM・UART 自動解決は未実装。
+- ROM イメージ生成 / FPGA 実機書き込み / 複数 CPU の選択 UI は未実装。
+- GUI 目視確認はヘッドレス環境のため未実施（下記「UI 確認点」参照）。
+
+### UI 上でユーザーが確認すべき点
+
+1. CPU パーツを Canvas に置き選択 → Properties/右クリックから `tests/test/hello_world.asm` を ASM に割り当て。
+2. Run タブの `Write Program` を押すと Log に `Program written to circuit: ... <- tests/test/hello_world.asm`。
+3. Properties の Program セクションに `Loaded: Yes` / Target / Program が出るか。
+4. `Run` を押すと UART Console に `Hello World !` が出るか。
+5. 割り当てが無いときは `No ASM source assigned`、不在 path では `Program source not found` が出るか。
+6. 従来の `Build → Run`（エディタタブ）と hello.asm の "Hi" が維持されているか。
+
+### 次に行うべき作業
+
+- ユーザー判断: Build Graph 試作（Canvas 配線解決）／loaded_program 永続化／ROM ロード／UI ラフ受領 のいずれへ進むか
+
+---
+
+## 現在の状況（PATCH_PART_PROGRAM_ASSIGN_V05 — Program / Sources 割り当て）
+
+**フェーズ: v0.5（進行中）。Canvas 上のパーツに外部ソースを割り当て、Build/Run が参照する最小実装。**
+
+> **テスト用の最小実装**だが、保存形式と API は将来の正式実装（内蔵エディタ / Build Graph /
+> Canvas からの CPU・ROM・RAM 自動解決 / 実機書き込み）へ拡張しやすい構造にした。
+> **固定 hello.asm 専用ではない**（割り当てを優先順位で解決）。
+
+### 完了した作業
+
+| 項目 | 内容 |
+|---|---|
+| sources データ | parts エントリ内 `sources{asm,hdl,rom}`（文字列 path）。既定 `{"asm":None,"hdl":None}` は不変、rom は設定時のみ。export/import round-trip。将来 dict 形式へ拡張可（`_source_path` が str/dict 両対応）|
+| Canvas API | `set_node_source`/`clear_node_source`/`node_sources`/`node_source`/`resolve_program_source`/`selected_node_id`。node 無しは False |
+| Properties | `PropPanel` に Program/Sources セクション（asm/hdl/rom 表示 + Set…/Clear/Open、rom は Set/Clear のみ）。`show_part(part,node_id,sources)`。signal `source_set/clear/open_requested`。node 選択時のみ表示（wire/visual/none と排他）|
+| 右クリック | design メニューに「Set ASM Source…」追加（`set_source_requested`）。既存「プログラムを開く」維持 |
+| Build/Run | `_assemble_and_load` を共通抽出。`_resolve_assigned_asm_path`（選択>CPU>任意 + 絶対化 + 存在チェック）。`_build` が割り当てを優先、無ければ既存タブ Build へフォールバック |
+| MainWin 配線 | Set→QFileDialog→`set_node_source`+persist+更新、Clear→`clear_node_source`、Open→割り当てあれば開く・無ければ "No ASM source assigned"。`_rel_to_root` でルート相対保存（不可なら絶対）|
+| 互換 | 既存 sources 既定・round-trip / Wiring / Wire Style / Part Visual / hello.asm headless（UART "Hi"）/ 既存 _build テストは不変 |
+
+### 作成したパッチ文書
+
+- `PATCH_PART_PROGRAM_ASSIGN_V05_ROADMAP.md` / `PATCH_PART_PROGRAM_ASSIGN_V05_CHECKLIST.md`
+
+### sources 保存形式（抜粋）
+
+```json
+{ "node_id": "node_0001", "part_id": "cpu.ak32", "x": 0, "y": 0,
+  "sources": { "asm": "src/hello.asm", "hdl": null } }
+```
+将来は `"asm": {"path":"src/hello.asm","entry":"main","target":"ak32_cpu"}` へ拡張予定。
+
+### Build / Run が asm を選ぶ優先順位
+
+1. 選択中 PartNode の `sources.asm`
+2. Canvas 内の CPU カテゴリ part の `sources.asm`
+3. Canvas 内で最初に見つかった `sources.asm`
+4. 割り当て不在 → 既存のエディタタブ Build 経路（hello.asm 検証はここで維持）
+
+### テスト結果
+
+- `pytest tests/` **729 件全通過**（PATCH_WIRE_STYLE_V05 完了時 708 → +21）
+- 新規 `tests/test_part_program_assign_v05.py`（21 件）
+- 既存 708 件は無改変で通過（sources 既定 round-trip / 既存 _build / hello.asm headless）
+- headless 検証: set/clear/node_source・dict 形式読み出し ✅ / resolve 優先順位（選択>CPU>任意）✅ / export-import で sources 維持・既定不変 ✅ / Properties Program 表示・signal ✅ / Open 未設定ログ・割り当て Open ✅ / 割り当て asm で Build→Run → UART "Hi" ✅ / 割り当て無しでも既存タブ Build → UART "Hi" ✅
+
+### まだ残っている問題（将来）
+
+- 内蔵エディタ / Build Graph 本実装 / Canvas 配線からの CPU・ROM・RAM 自動解決は未実装。
+- sources 値の dict 形式（entry/target/top）/ ROM イメージ生成 / source watcher は未実装。
+- プロジェクト外パス参照の移植性（絶対パス保存）は将来課題。
+- 実機 FPGA 書き込み / C コンパイラ / HDL 合成は v0.6 以降。
+- GUI 目視確認はヘッドレス環境のため未実施（下記「UI 確認点」参照）。
+
+### UI 上でユーザーが確認すべき点
+
+- パーツ選択時、Properties に Program / Sources（ASM/HDL/ROM）セクションが出るか。
+- 「Set ASM…」でファイルを選ぶと値が表示され、保存・再読み込みで復元するか。
+- 「Open」で割り当て asm が開くか。未設定で「No ASM source assigned」ログが出るか。
+- CPU パーツに asm を割り当てて Build → Run で UART "Hi" が出るか。
+- 割り当てが無いときは従来どおりエディタタブの Build が効くか。
+
+### 次に行うべき作業
+
+- ユーザー判断: Build Graph 試作（Canvas 配線解決）／内蔵エディタ／Port Detail／UI ラフ受領 のいずれへ進むか
+
+---
+
+## 現在の状況（PATCH_WIRE_STYLE_V05 — Wire Style）
+
+**フェーズ: v0.5（進行中）。選択中 wire の色・太さを編集できるようにした。**
+
+### 完了した作業
+
+| 項目 | 内容 |
+|---|---|
+| style データ | connection に任意 `style{color,width}`。未設定は kind 既定、空キーは保存しない。export/import round-trip 維持。`conn["width"]`（論理バス幅 bits）と `style.width`（描画幅）は別物 |
+| 描画 | `ConnectionLine.apply_style(color,width)` で base pen 再構築 + `base_color/base_width`。優先度 **selected > active > hover > custom style > kind default**（`_apply_pen()`）|
+| Canvas API | `set_connection_style(conn_id,color=None,width=None)`（color="" でクリア・未設定属性は不変）/ `reset_connection_style` / `get_connection`。存在しない conn は False。selected/hover 維持 |
+| 選択通知 | Canvas signal `wire_selected(dict)` / `wire_selection_cleared()`。`_set_selected_conn` で emit、style 変更時も選択中なら再 emit。wire 選択時は node 選択をクリア |
+| Properties | `PropPanel.show_wire(conn)` で Wire セクション（id/kind/from/to/color/width + 色パレット〜12色 + width プリセット 1/2/3/5 + Reset Style/Default）。part 用と wire 用は別 swatch・別ハンドラ。node 選択表示は不変 |
+| MainWin | `wire_selected→show_wire`、`wire_color/width_changed`・`wire_style_reset`→Canvas API + `_persist_system`。`_on_canvas_selection` は wire 選択中なら維持 |
+| 右クリック | wire メニューに「Reset Wire Style」追加（Delete Wire 維持）|
+| 互換 | port-drag / wire 選択・削除 / visual port move / 右クリック接続 / curved wire / hover / signal overlay / node Properties / export-import は不変 |
+
+### 作成したパッチ文書
+
+- `PATCH_WIRE_STYLE_V05_ROADMAP.md` / `PATCH_WIRE_STYLE_V05_CHECKLIST.md`
+
+### テスト結果
+
+- `pytest tests/` **708 件全通過**（PATCH_VISUAL_PORT_MOVE_V05 完了時 685 → +23）
+- 新規 `tests/test_wire_style_v05.py`（23 件）
+- 既存 685 件は無改変で通過
+- headless 検証: custom color/width が base pen に反映 ✅ / 優先度 selected>active>hover>custom>kind ✅ / set/reset の True/False・style 削除 ✅ / export-import で style 維持・未設定は style キー無し ✅ / wire 選択で Properties 切替・node 表示維持 ✅ / palette 選択色が selected wire に適用 ✅
+
+### 保存形式（抜粋）
+
+```json
+{ "id": "conn_0001", "from": {...}, "to": {...}, "kind": "bus",
+  "style": { "color": "#ffcc00", "width": 3.0 } }
+```
+style 未設定の connection には `style` キーを出さない。
+
+### まだ残っている問題（将来）
+
+- connection kind の本格編集 / wire label / wire rename / constraint は未実装。
+- Port Detail 本実装 / visual port 削除 UI・rename / Part Visual サイズ変更は別パッチ。
+- Undo・Redo / `ui/canvas.py` 分割 / legacy `_port_dot` 完全削除は将来。
+- GUI 目視確認はヘッドレス環境のため未実施（下記「UI 確認点」参照）。
+
+### UI 上でユーザーが確認すべき点
+
+- wire を選択すると Properties が Wire 表示（id/kind/from/to/color/width）へ切り替わるか。
+- 色パレット / width / Default / Reset Style で線の見た目が変わり、Properties 表示も更新されるか。
+- Run 中の signal overlay（青く光る）や hover と重なっても、選択・custom 色が破綻しないか。
+- node を選ぶと従来の Part Properties（Visual 色パレット）に戻るか。
+- wire 右クリックの「Reset Wire Style」で既定表示に戻るか。
+
+### 次に行うべき作業
+
+- ユーザー判断: Port Detail パネル／wire label 表示／Part Visual サイズ変更／UI ラフ受領 のいずれへ進むか
 
 ---
 
