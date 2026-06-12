@@ -7,9 +7,12 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
-_BTN_MIN_W = 96
-_BTN_MIN_H = 48
-_RIBBON_MIN_H = 76
+# v0.5 Patch 2: buttons size to their content (compact) instead of being
+# stretched edge-to-edge. Width 0 => natural sizeHint; only a modest minimum
+# height is enforced for clickability.
+_BTN_MIN_W = 0
+_BTN_MIN_H = 28
+_RIBBON_MIN_H = 56
 
 
 class RibbonBar(QWidget):
@@ -45,14 +48,18 @@ class RibbonBar(QWidget):
         """Add a ribbon page with a tab label and a row of tool buttons."""
         page = QWidget()
         row = QHBoxLayout(page)
-        row.setContentsMargins(4, 2, 4, 2)
-        row.setSpacing(4)
+        row.setContentsMargins(6, 2, 6, 2)
+        row.setSpacing(2)
         for action in actions:
             btn = QToolButton()
             btn.setDefaultAction(action)
             btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
-            btn.setMinimumSize(self._btn_min_w, self._btn_min_h)
-            row.addWidget(btn)
+            # Compact: natural width (unless a positive min width was requested),
+            # only a modest min height. Left-packed via the trailing stretch.
+            if self._btn_min_w > 0:
+                btn.setMinimumWidth(self._btn_min_w)
+            btn.setMinimumHeight(self._btn_min_h)
+            row.addWidget(btn, 0, Qt.AlignmentFlag.AlignLeft)
         row.addStretch()
         self._tab_bar.addTab(title)
         self._stack.addWidget(page)

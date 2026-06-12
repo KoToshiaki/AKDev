@@ -44,10 +44,11 @@ def test_ribbon_bar_multiple_pages():
 
 
 def test_ribbon_bar_default_button_min_size():
+    # Patch 2 (B): buttons are compact — natural width (0) + modest min height.
     ribbon = RibbonBar()
     w, h = ribbon.button_min_size()
-    assert w >= 96
-    assert h >= 48
+    assert w == 0          # natural width, not stretched edge-to-edge
+    assert 0 < h <= 40
 
 
 def test_ribbon_bar_custom_button_min_size():
@@ -67,53 +68,79 @@ def test_ribbon_ref_exists():
     assert hasattr(MainWin(), "_ribbon")
 
 
-def test_ribbon_has_four_pages():
+def test_ribbon_has_five_pages():
+    # Patch 2 (A): Project tab removed.
     win = MainWin()
-    assert win._ribbon.page_count() == 4
+    assert win._ribbon.page_count() == 5
 
 
 def test_ribbon_page_titles():
     win = MainWin()
     titles = _titles(win)
-    for expected in ("File", "Build / Run", "View", "Tools"):
+    for expected in ("Parts", "Wiring", "Run", "View", "Debug"):
         assert expected in titles, f"'{expected}' tab missing from ribbon"
 
 
-def test_ribbon_file_page():
+def test_ribbon_no_project_tab():
+    # Patch 2 (A): Project tab is gone; File menu keeps the project actions.
     win = MainWin()
-    idx = _titles(win).index("File")
+    assert "Project" not in _titles(win)
+
+
+def test_ribbon_parts_page():
+    # Patch 2 (C): meaningful operations only.
+    win = MainWin()
+    idx = _titles(win).index("Parts")
     texts = win._ribbon.page_action_texts(idx)
-    for name in ("New Project", "Open Project", "Save Project"):
-        assert name in texts, f"'{name}' missing from File tab"
+    for name in ("Parts Library", "Import Part…", "Open Parts Folder"):
+        assert name in texts, f"'{name}' missing from Parts tab"
+    for gone in ("Add Part", "Clone", "Delete"):
+        assert gone not in texts, f"'{gone}' should be removed from Parts tab"
 
 
-def test_ribbon_build_run_page():
+def test_ribbon_wiring_page():
     win = MainWin()
-    idx = _titles(win).index("Build / Run")
+    idx = _titles(win).index("Wiring")
+    texts = win._ribbon.page_action_texts(idx)
+    for name in ("Wire Mode", "Cancel Wire"):
+        assert name in texts, f"'{name}' missing from Wiring tab"
+
+
+def test_ribbon_run_page():
+    win = MainWin()
+    idx = _titles(win).index("Run")
     texts = win._ribbon.page_action_texts(idx)
     for name in ("Build", "Reset", "Run", "Step", "Pause"):
-        assert name in texts, f"'{name}' missing from Build/Run tab"
+        assert name in texts, f"'{name}' missing from Run tab"
 
 
 def test_ribbon_view_page():
+    # Patch 2 (H): Zoom In/Out removed (wheel zoom remains); Fit/Reset kept.
     win = MainWin()
     idx = _titles(win).index("View")
     texts = win._ribbon.page_action_texts(idx)
-    for name in ("Parts Library", "Properties", "Register View",
-                 "Log / Console", "UART Console", "Bus Trace"):
+    for name in ("Grid", "Snap", "Reset Zoom", "Fit", "Properties"):
         assert name in texts, f"'{name}' missing from View tab"
+    for gone in ("Zoom In", "Zoom Out"):
+        assert gone not in texts, f"'{gone}' should be removed from View tab"
 
 
-def test_ribbon_tools_page_exists():
+def test_ribbon_debug_page():
+    # Patch 2 (I): Log and Console are separate entries.
     win = MainWin()
-    assert "Tools" in _titles(win)
+    idx = _titles(win).index("Debug")
+    texts = win._ribbon.page_action_texts(idx)
+    for name in ("Register View", "Memory", "Bus Trace",
+                 "UART Console", "Log", "Console"):
+        assert name in texts, f"'{name}' missing from Debug tab"
 
 
 def test_ribbon_button_min_size():
+    # Patch 2 (B): compact buttons — natural width, modest height.
     win = MainWin()
     w, h = win._ribbon.button_min_size()
-    assert w >= 96
-    assert h >= 48
+    assert w == 0
+    assert 0 < h <= 40
 
 
 def test_menubar_has_only_file():

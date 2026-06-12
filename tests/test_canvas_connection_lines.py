@@ -187,12 +187,10 @@ def test_conn_line_endpoint_is_port_position():
     canvas.add_part_at(_PART_B, QPointF(200.0, 0.0))
     canvas.add_connection("node_0001", "p1", "node_0002", "p2")
     line = _conn_lines(canvas)[0]
-    # Start of the path should be at right-edge port of node_0001, snapped to grid.
-    # node at (0,0): right edge raw = (_NODE_W, _NODE_H/2) = (140, 28)
-    # snapped (grid=20): x=140 (7*20), y=round(28/20)*20 = round(1.4)*20 = 20
-    g = 20.0
-    expected_x = round(_NODE_W / g) * g
-    expected_y = round((_NODE_H / 2) / g) * g
+    # B2 fix: the wire endpoint must sit on the REAL port position (no grid gap),
+    # not the grid-snapped one. node at (0,0): right edge = (_NODE_W, _NODE_H/2).
+    expected_x = float(_NODE_W)
+    expected_y = float(_NODE_H / 2)
     start = line.path().pointAtPercent(0.0)
     assert abs(start.x() - expected_x) < 1.0
     assert abs(start.y() - expected_y) < 1.0

@@ -2,33 +2,23 @@
   "chips": [],
   "parts": [
     {
-      "node_id": "node_0003",
-      "part_id": "cpu.ak32",
-      "name": "AK32 CPU",
-      "x": 360.0,
-      "y": 40.0,
-      "sources": {
-        "asm": "src/main.asm",
-        "hdl": null
-      }
-    },
-    {
-      "node_id": "node_0002",
-      "part_id": "fpga.ecp5_85f",
-      "name": "Lattice ECP5-85F",
-      "x": 200.0,
-      "y": 40.0,
-      "sources": {
-        "asm": null,
-        "hdl": null
-      }
-    },
-    {
       "node_id": "node_0001",
       "part_id": "fpga.ecp5_85f",
       "name": "Lattice ECP5-85F",
-      "x": 40.0,
-      "y": 40.0,
+      "x": -152.0,
+      "y": -98.0,
+      "sources": {
+        "asm": null,
+        "hdl": null
+      },
+      "instance_color": "#1a550c"
+    },
+    {
+      "node_id": "node_0002",
+      "part_id": "cpu.ak32",
+      "name": "AK32 CPU",
+      "x": -110.0,
+      "y": 25.0,
       "sources": {
         "asm": null,
         "hdl": null

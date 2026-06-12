@@ -47,12 +47,16 @@ def test_view_actions_are_checkable():
 
 
 def test_view_actions_checked_when_visible():
-    """toggleViewAction is checked when the dock is visible."""
+    """toggleViewAction is checked when the dock is visible.
+
+    Patch 2 (D): Parts Library starts hidden, so it is excluded here and
+    covered by the dedicated tests below.
+    """
     win = _win()
     win.show()
     _app.processEvents()
     for dock in (
-        win._parts_lib_dock, win._props_dock, win._reg_view_dock,
+        win._props_dock, win._reg_view_dock,
         win._log_dock, win._uart_console_dock, win._bus_trace_dock,
     ):
         assert dock.toggleViewAction().isChecked(), (
@@ -61,20 +65,43 @@ def test_view_actions_checked_when_visible():
     win.close()
 
 
+def test_parts_lib_hidden_on_start():
+    """Patch 2 (D): Parts Library is hidden at startup (Canvas leads)."""
+    win = _win()
+    win.show()
+    _app.processEvents()
+    assert not win._parts_lib_dock.isVisible()
+    assert not win._parts_lib_dock.toggleViewAction().isChecked()
+    win.close()
+
+
+def test_parts_lib_toggle_shows():
+    """Patch 2 (D): the Parts ribbon toggle can show the Parts Library again."""
+    win = _win()
+    win.show()
+    _app.processEvents()
+    action = win._parts_lib_dock.toggleViewAction()
+    action.trigger()          # check -> show
+    _app.processEvents()
+    assert win._parts_lib_dock.isVisible()
+    assert action.isChecked()
+    win.close()
+
+
 # ---------------------------------------------------------------------------
 # hide / show via toggleViewAction
 # ---------------------------------------------------------------------------
 
 def test_hide_dock_via_toggle_action():
-    """Triggering toggleViewAction hides the dock."""
+    """Triggering toggleViewAction hides an initially-visible dock."""
     win = _win()
     win.show()
     _app.processEvents()
-    action = win._parts_lib_dock.toggleViewAction()
+    action = win._props_dock.toggleViewAction()
     assert action.isChecked()
     action.trigger()          # uncheck → hide
     _app.processEvents()
-    assert not win._parts_lib_dock.isVisible()
+    assert not win._props_dock.isVisible()
     assert not action.isChecked()
     win.close()
 
@@ -84,23 +111,23 @@ def test_show_dock_via_toggle_action():
     win = _win()
     win.show()
     _app.processEvents()
-    action = win._parts_lib_dock.toggleViewAction()
+    action = win._props_dock.toggleViewAction()
     action.trigger()   # hide
     _app.processEvents()
     action.trigger()   # show again
     _app.processEvents()
-    assert win._parts_lib_dock.isVisible()
+    assert win._props_dock.isVisible()
     assert action.isChecked()
     win.close()
 
 
 def test_hide_show_all_docks():
-    """Each dock can be independently hidden and shown via its toggleViewAction."""
+    """Each initially-visible dock can be hidden and shown via its toggleViewAction."""
     win = _win()
     win.show()
     _app.processEvents()
     docks = [
-        win._parts_lib_dock, win._props_dock, win._reg_view_dock,
+        win._props_dock, win._reg_view_dock,
         win._log_dock, win._uart_console_dock, win._bus_trace_dock,
     ]
     for dock in docks:

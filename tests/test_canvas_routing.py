@@ -497,3 +497,60 @@ def test_from_port_pos_missing_node_returns_none():
 def test_to_port_pos_missing_node_returns_none():
     canvas = _make_canvas()
     assert canvas._to_port_pos("ghost") is None
+
+
+# ---------------------------------------------------------------------------
+# B2 — wire endpoints sit exactly on the ports (no grid gap), even snap OFF
+# ---------------------------------------------------------------------------
+
+def test_wire_endpoints_match_ports_when_unsnapped():
+    """Endpoints follow the real port positions for off-grid (snap OFF) parts."""
+    from ui.canvas import _NODE_W, _NODE_H
+    canvas = _make_canvas()
+    # Off-grid positions (not multiples of GRID=20).
+    canvas.add_part_at(_PART_A, QPointF(13.0, 7.0))
+    canvas.add_part_at(_PART_B, QPointF(317.0, 43.0))
+    canvas.add_connection("node_0001", "bus", "node_0002", "bus")
+    line = list(canvas._conn_items.values())[0]
+    path = line.path()
+    start = path.elementAt(0)
+    end = path.elementAt(path.elementCount() - 1)
+    # from-port = right edge of node_0001; to-port = left edge of node_0002
+    assert start.x == pytest.approx(13.0 + _NODE_W)
+    assert start.y == pytest.approx(7.0 + _NODE_H / 2)
+    assert end.x == pytest.approx(317.0)
+    assert end.y == pytest.approx(43.0 + _NODE_H / 2)
+
+
+def test_wire_endpoints_follow_node_after_move():
+    """Moving a node keeps the wire endpoint glued to its port."""
+    from ui.canvas import _NODE_W, _NODE_H
+    canvas = _make_canvas()
+    canvas.add_part_at(_PART_A, QPointF(0.0, 0.0))
+    canvas.add_part_at(_PART_B, QPointF(300.0, 0.0))
+    canvas.add_connection("node_0001", "bus", "node_0002", "bus")
+    canvas.get_node("node_0002").setPos(QPointF(411.0, 97.0))  # off-grid move
+    canvas.update_connections()
+    line = list(canvas._conn_items.values())[0]
+    path = line.path()
+    end = path.elementAt(path.elementCount() - 1)
+    assert end.x == pytest.approx(411.0)
+    assert end.y == pytest.approx(97.0 + _NODE_H / 2)
+
+
+# ---------------------------------------------------------------------------
+# B3 — canvas reads as loaded (scene rect + center origin)
+# ---------------------------------------------------------------------------
+
+def test_scene_rect_is_generous():
+    canvas = _make_canvas()
+    r = canvas.sceneRect()
+    assert r.width() >= 1000
+    assert r.height() >= 1000
+    assert r.left() < 0 < r.right()
+    assert r.top() < 0 < r.bottom()
+
+
+def test_center_origin_does_not_raise():
+    canvas = _make_canvas()
+    canvas.center_origin()   # must not raise headless

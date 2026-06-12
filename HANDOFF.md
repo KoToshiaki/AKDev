@@ -1,6 +1,298 @@
 # AKDev 引き継ぎメモ
 
-更新日: 2026-05-30（セッション 40）
+更新日: 2026-06-07（PATCH_PORT_DRAG_CONNECT_V05 — Port Drag Connect）
+
+---
+
+## 現在の状況（PATCH_PORT_DRAG_CONNECT_V05 — Port Drag Connect）
+
+**フェーズ: v0.5（進行中）。visual port からドラッグして別ノードへ接続する操作を追加。**
+
+### 完了した作業
+
+| 項目 | 内容 |
+|---|---|
+| port-drag 開始 | visual port 上の左 press で開始（幾何ヒットテスト `_visual_port_at`）。`accept` し super を呼ばずノード移動を抑止 |
+| preview | カーソルへ向かう **curved 破線** preview（source port の side 外向き制御点）|
+| 接続確定 | 別ノードで release → target に新 vp 生成 + `add_connection(from_vp=既存, to_vp=新)`。Dynamic Visual Port + curved wire + export/import に乗る |
+| キャンセル | 同一ノード / target 無し / Esc / 右クリック（ドラッグ中）|
+| 互換 | 既存の右クリック接続・中ボタン pan・wire mode・Delete・削除同期・export-import は不変 |
+
+### 作成したパッチ文書
+
+- `PATCH_PORT_DRAG_CONNECT_V05_ROADMAP.md` / `PATCH_PORT_DRAG_CONNECT_V05_CHECKLIST.md`
+
+### テスト結果
+
+- `pytest tests/` **630 件全通過**（PATCH_WIRING_PORTS_V05 追加修正完了時 615 → +15）
+- 新規 `tests/test_port_drag_connect_v05.py`（15 件）
+- 既存 615 件は無改変で通過
+- headless スモーク: 右クリックで vp 生成 → port-drag で別ノード接続（source vp 再利用・target 新 vp・curved）✅ / round-trip ✅ / cancel ✅ / hello.asm UART "Hi" ✅
+
+### まだ残っている問題（将来）
+
+- 接続先候補の hover ハイライト、visual port の対話ドラッグ移動、空ポートからのドラッグ開始。
+- legacy `_port_dot` の完全削除。
+- GUI 目視確認はヘッドレス環境のため未実施。
+
+### 次に行うべき作業
+
+- ユーザー判断: hover ハイライト／visual port 対話ドラッグ移動／UI ラフ受領 のいずれへ進むか
+
+---
+
+## 現在の状況（PATCH_WIRING_PORTS_V05 追加修正）
+
+**フェーズ: v0.5（進行中）。Dynamic Visual Port の目視確認バグ 2 件を追加修正。**
+
+### 完了した追加修正
+
+| # | 内容 |
+|---|---|
+| B5 | visual port dot がパーツ移動後に古い位置へ残るゴーストを修正。`PartNode.boundingRect` を `_NODE_PAD` 分拡張し、辺上の dot を item bounds に内包（移動時に旧 dot がクリアされる）。visual port は side/offset から都度 scene 座標計算（絶対座標で持たない方針を維持）|
+| B6 | Dynamic Visual Port 接続を **curved wire**（`ConnectionLine.update_curve`、cubic bezier・side 外向き制御点）で描画。`update_connections` を dynamic=curve / legacy=grid に分岐。データ構造は維持し、捨てたのは Dynamic 接続への grid/Manhattan 表示のみ。legacy（vp 無し）接続は grid 維持 |
+
+### テスト結果（追加修正）
+
+- `pytest tests/` **615 件全通過**（Dynamic Visual Port 導入時 610 → +5）
+- `tests/test_wiring_ports_v05.py` に boundingRect 被覆・dynamic=curve・legacy≠curve・端点=vp座標・移動追従 を追加（計 28 件）
+- headless スモーク: boundingRect が辺 dot を内包 ✅ / dynamic 接続が cubic curve（4要素）✅ / 端点=vp 座標・移動追従 ✅ / legacy 非 curve ✅ / hello.asm UART "Hi" ✅
+- 右クリック接続 / Cancel Wire / Escape / 削除同期 / export-import は不変
+
+### まだ残っている問題（将来）
+
+- ポートからドラッグ接続開始、接続先候補 hover ハイライト、visual port の対話ドラッグ移動。
+- legacy `_port_dot` の完全削除。
+- GUI 目視確認はヘッドレス環境のため未実施。
+
+### 次に行うべき作業
+
+- ユーザー判断: 対話ドラッグ移動／ポートドラッグ接続／UI ラフ受領 のいずれへ進むか
+
+---
+
+## 現在の状況（PATCH_WIRING_PORTS_V05 — Dynamic Visual Port）
+
+**フェーズ: v0.5（進行中）。Wiring を既存ノードエディタに寄せ、接続点をデータ化。**
+
+### 完了した作業
+
+| 項目 | 内容 |
+|---|---|
+| Dynamic Visual Port | パーツは初期 0 ポート。wire 接続時に接点へ visual port を生成（`PartNode._visual_ports` + `add/get/remove/set/visual_port_pos`、paint で小円描画）|
+| logical / visual 分離 | 接続 from/to に `visual_port_id` + `logical_port` を追加（`port` は互換維持）|
+| 端点解決 | `_conn_endpoint` で visual port 座標を使用、無ければ従来ノード端へ fallback。ノード移動で追従 |
+| 生成 | `_create_visual_port`（辺ごとに自動スタック）、`_finish_wire` が両端に生成 |
+| 移動 / 整列 | `set_visual_port_offset` / `set_visual_port_side` / `arrange_visual_ports`（locked 尊重）+ 設計右クリック「ポートを整列」|
+| 保存 | export_parts に `visual_ports`（0 個は省略）、import で復元 + `_vp_seq` 巻き戻し防止 |
+| 削除同期 | ノード削除で関連 wire 削除（既存）+ `_prune_orphan_visual_ports` で接続から外れた vp を削除 |
+| legacy 互換 | `_port_dot` は `setVisible(False)` で残す（sim/`_on_port_click`・既存テスト用）。vp 無し接続は従来どおり |
+
+### 作成したパッチ文書
+
+- `PATCH_WIRING_PORTS_V05_ROADMAP.md` / `PATCH_WIRING_PORTS_V05_CHECKLIST.md`
+
+### テスト結果
+
+- `pytest tests/` **610 件全通過**（PATCH_PART_VISUAL_V05 完了時 587 → +23）
+- 新規 `tests/test_wiring_ports_v05.py`（23 件）
+- 既存 587 件は無改変で通過（後方互換・`_port_dot` 非表示でも維持）
+- headless スモーク: 初期0ポート/legacy dot非表示 ✅ / 接続で両端 vp 生成・conn 参照 ✅ / 端点=vp 座標・移動追従 ✅ / 保存→読込 round-trip ✅ / ノード削除で orphan vp prune ✅ / hello.asm UART "Hi" ✅
+
+### まだ残っている問題
+
+- 将来: ポートからドラッグして接続開始、接続先候補の hover ハイライト、visual port の対話ドラッグ移動（本パッチは API + 整列のみ）。
+- legacy `_port_dot` は非表示で残置（完全削除は将来）。
+- GUI 目視確認はヘッドレス環境のため未実施。
+
+### 次に行うべき作業
+
+- ユーザー判断: ポートドラッグ接続の試作／visual port 対話ドラッグ／UI ラフ受領 のいずれへ進むか
+
+---
+
+## 現在の状況（PATCH_PART_VISUAL_V05 — Part Visual 第1段階）
+
+**フェーズ: v0.5（進行中）。Part Visual 編集の第1段階（色変更）を実装。**
+
+### 完了した作業
+
+| 項目 | 内容 |
+|---|---|
+| PartNode 色 | `_color` + `set_color()/color()`、`paint()` で instance_color をカテゴリ色より優先 |
+| Canvas API | `set_node_color(node_id, hex)`、`export_parts`/`import_parts` で `instance_color` を round-trip（色設定時のみ保存）|
+| PropPanel | 「Visual」セクション + 100 色パレット（10×10、コード内生成）+「Default color」。`color_changed(node_id, hex)` シグナル |
+| MainWin | `color_changed` → `set_node_color` → 開いていれば `_persist_system()` |
+
+### 作成したパッチ文書
+
+- `PATCH_PART_VISUAL_V05_ROADMAP.md` / `PATCH_PART_VISUAL_V05_CHECKLIST.md`
+
+### テスト結果
+
+- `pytest tests/` **587 件全通過**（PATCH_WIRING_V05 追加修正完了時 567 → +20）
+- 新規 `tests/test_part_visual_v05.py`（20 件）
+- headless スモーク: パレットで色適用 ✅ / export・import round-trip ✅ / Default で既定復帰 ✅ / palette 100 色 ✅ / hello.asm UART "Hi" ✅
+
+### まだ残っている問題
+
+- 第2段階（Canvas のサイズ変更ハンドル）は未着手（別パッチ候補）。
+- GUI 目視確認はヘッドレス環境のため未実施。
+- part.json の `color` 既定値対応・配線色変更 UI・Run Status・Error タブは未実装。
+
+### 次に行うべき作業
+
+- ユーザー判断: Part Visual 第2段階（サイズ）／part.json color 対応／UI ラフ受領 のいずれへ進むか
+
+---
+
+## 現在の状況（PATCH_WIRING_V05 追加修正）
+
+**フェーズ: v0.5（進行中）。PATCH_WIRING_V05 の追加修正として目視確認バグ 3 件を修正。**
+
+### 完了した作業（追加修正 B1〜B3 + B4 調査）
+
+| # | 内容 |
+|---|---|
+| B1 | ノード削除時に接続 wire も削除。`_remove_node()` を単一窓口にし全削除経路を集約（Delete キー / 右クリック design・wire / `delete_selected`）。接続データ・ConnectionLine・wire/pending を同期削除し export に孤立を残さない |
+| B2 | wire 端点を実ポート座標で上書き（grid に丸めない）。snap OFF パーツでも隙間なく接続、移動追従。BFS/waypoint は grid 維持 |
+| B3 | `setSceneRect(4000²)` で Pan 可動域確保、起動時 `center_origin()`、grid OFF でも原点十字常時描画、"Canvas ready" を Log/ステータスバー表示 |
+| B4 | 既存ノード UI（Unity/Blender/Unreal）の挙動を `PATCH_WIRING_V05_ROADMAP.md` 9 に調査メモ反映。当面は右クリック方式維持＋内部はポート接続モデルへ |
+
+### 変更ファイル（追加修正）
+
+- `ui/canvas.py`（`_remove_node`/`_delete_node`/`center_origin`、`update_connections` 端点上書き、`setSceneRect`、GridScene 原点十字）
+- `ui/win.py`（`_arrange_initial_layout` に center+ready）
+- `tests/test_canvas_delete.py`（新規 13 件）/ `tests/test_canvas_routing.py`（B2/B3 6 件追加）/ `tests/test_canvas_connection_lines.py`（端点テストを正挙動へ更新）
+
+### テスト結果（追加修正）
+
+- `pytest tests/` **567 件全通過**（PATCH_WIRING_V05 完了時 551 → +16）
+- headless スモーク: B1 削除で wire/export 同期 ✅ / B2 端点 (153,35)・(317,71) 実ポート一致 ✅ / B3 sceneRect 4000² ✅ / hello.asm UART "Hi" ✅
+
+### まだ残っている問題
+
+- GUI 起動の目視確認はヘッドレス環境のため未実施。
+- ポートからドラッグ接続・接続可否ハイライト・連続配線は将来拡張（B4 方針として記載）。
+- Part Visual 編集・Run Status 表示・Error タブ・配線色変更 UI は方針記載のみ（未実装）。
+
+### 次に行うべき作業
+
+- ユーザー判断: ポートドラッグ接続の試作／Part Visual 第1段階（色変更）／UI ラフ受領 のいずれへ進むか
+
+---
+
+## 現在の状況（PATCH_WIRING_V05 — Wiring Workflow Fix）
+
+**フェーズ: v0.5（進行中）。Patch 2 で残った KI-1 を別パッチ PATCH_WIRING_V05 で解決。**
+
+### 完了した作業（PATCH_WIRING_V05）
+
+| 項目 | 内容 |
+|---|---|
+| wire 状態整理 | armed（始点未選択）/ drawing（始点選択済）の 2 サブ状態に整理。`_begin_wire_from()` 新設、`_start_wire()` は委譲 |
+| 右クリック整理 | wire モード中の右クリックに通常操作（Properties/開く/HDL/複製/削除）を併設。armed=「ここから接続を開始」、drawing=「ここに接続」 |
+| キャンセル統一 | Cancel Wire / Escape / メニュー Wire Cancel を `_cancel_wire()` で統一。preview/waypoints/handles/pending/装飾を確実クリア |
+| フロー仕様 | 接続完了後は design へ戻る（1 始点 1 接続）。連続配線は将来。`UI_SPEC_V05.md` 11-I に記録 |
+| 状態可視化 | ステータスバー文言調整 + Wiring トグル checked + Canvas 枠をアクセント色（`_refresh_wire_decoration`）|
+| KI-1 | `ERROR.md` で解決済みに更新 |
+
+### 作成したパッチ文書
+
+- `PATCH_WIRING_V05_ROADMAP.md` / `PATCH_WIRING_V05_CHECKLIST.md`
+
+### テスト結果（PATCH_WIRING_V05）
+
+- `pytest tests/` **551 件全通過**（Patch 2 完了時 534 件 → +17 件）
+- 新規: `tests/test_wiring_v05.py`（17 件）
+- 既存 `test_canvas_wire_mode.py` / `test_canvas_routing.py` は変更なしで通過
+- headless スモーク: トグル→armed→接続を開始→ここに接続→design 復帰 ✅ / Escape 解除 ✅ / Canvas 枠装飾 ON/OFF ✅ / hello.asm UART "Hi" ✅
+
+### まだ残っている問題
+
+- 連続配線（接続後も wire を継続して複数本引く）は将来拡張（本パッチ対象外）。
+- GUI 起動の目視確認はヘッドレス環境のため未実施。
+- Part Visual 編集・Run Status 表示・Error タブ・配線色変更 UI は方針記載のみ（未実装）。
+
+### 次に行うべき作業
+
+- ユーザー判断: Part Visual 第1段階（色変更）／連続配線モード／UI ラフ受領 のいずれへ進むか
+- UI ラフ受領 → `UI_SPEC_V05.md` セクション 12 反映
+
+---
+
+## 現在の状況（v0.5 UI Prototype Patch 2 — User Review Fixes）
+
+**フェーズ: v0.5 UI Polish & Usability（進行中）。Patch 1 をユーザー目視レビューし、Patch 2 で反映。**
+
+### 完了した作業（Patch 2）
+
+| # | 項目 | 内容 |
+|---|---|---|
+| A | Project タブ削除 | リボンから撤去。New/Open/Save/Save As は File メニューに残存 |
+| B | リボンボタン幅縮小 | `ui/ribbon.py` を自然幅・左詰め・余白縮小に変更（min width 96→0, height 48→28）|
+| C | Parts タブ再設計 | Add Part/Clone/Delete/Properties を撤去。Parts Library トグル + Import Part…(disabled+説明) + Open Parts Folder |
+| D | Parts Library 初期非表示 | `_parts_lib_dock.hide()`。Parts タブのトグルで表示 |
+| E | Part Visual 編集方針 | `UI_SPEC_V05.md` 11-D に記載（実装は次パッチ）|
+| F | Wiring 最小修正 | Cancel Wire 強化 + Escape キャンセル + ステータスバー表示。右クリック占有は KI-1 記録 |
+| G | Run 確認 | `UI_SPEC_V05.md` 11-F に Status 候補記載（実装は将来）|
+| H | View タブ整理 | Grid 起動時 OFF、Zoom In/Out をリボンから撤去（ホイールズーム維持、Reset/Fit 残存）|
+| I | Log/Console 分離 | Log dock 改称 + Console dock 新規追加。Run/UART 出力を Console へ |
+
+### テスト結果（Patch 2）
+
+- `pytest tests/` **534 件全通過**（Patch 1 完了時 532 件 → +2 件）
+- 更新: `tests/test_ribbon.py`（5タブ・Parts/View/Debug・ボタンサイズ）/ `tests/test_dock_visibility.py`（Parts Library 初期非表示）
+- headless スモーク: リボン 5 タブ ✅ / Grid OFF ✅ / Parts Library 非表示 ✅ / Cancel Wire ✅ / Escape ✅ / hello.asm UART "Hi" ✅ / Console 出力 ✅
+
+### まだ残っている問題
+
+- **KI-1（Wiring 右クリック占有）**: 未解決。`ERROR.md` に記録。本パッチでは抜ける導線のみ確保。本質修正は別パッチ **`PATCH_WIRING_V05`**（未作成・提案中）。
+- GUI 起動の目視確認はヘッドレス環境のため未実施。
+- Part Visual 編集・Run Status 表示・Error タブは方針記載のみ（未実装）。
+
+### 次に行うべき作業
+
+- ユーザー判断: `PATCH_WIRING_V05` を起こすか／Part Visual 第1段階（色変更）に進むか
+- UI ラフ受領 → `UI_SPEC_V05.md` セクション 12 反映
+
+---
+
+## 現在の状況（v0.5 UI Prototype Patch 1）
+
+**フェーズ: v0.5 UI Polish & Usability（進行中）。最初の実装として UI Prototype Patch を実施。**
+
+完成版 UI ではなく、使いやすい UI の方向性を確認するためのたたき台。
+
+### 完了した作業
+
+| 項目 | 内容 |
+|---|---|
+| Hub 画面 | `ui/hub.py` 新規。起動時の入口（New / Open / Recent枠 / Templatesカード / Docs導線）。New/Open はシグナルで既存処理へ接続 |
+| 入口遷移 | `main.py` で Hub 先行表示 → New/Open で Workspace へ遷移 |
+| Workspace 初期表示整理 | `_arrange_initial_layout()` で Log/Console と Properties を前面化（Canvas主役） |
+| Ribbon 再構成 | File/Build-Run/View/Tools の 4 タブ → **Project / Parts / Wiring / Run / View / Debug** の 6 タブ |
+| Debug パネル整理 | デバッグパネルのトグルを Debug タブへ集約 |
+| Visual Identity 土台 | `ui/theme.py` 新規。アクセントカラー `#3B82F6`、枠線軽減、hover/selected/active、QSS を `main.py` で全体適用 |
+| Canvas 公開メソッド | `delete_selected()` / `clone_selected()` を `ui/canvas.py` に追加（Parts タブ Delete/Clone から利用） |
+
+### テスト結果
+
+- `pytest tests/` **532 件全通過**（v0.4.1 完了時 518 件 → +14 件）
+- 新規: `tests/test_hub.py`（7 件）/ `tests/test_theme.py`（5 件）
+- 更新: `tests/test_ribbon.py`（4 タブ → 6 タブ構成に追従）
+- hello.asm headless 検証: UART "Hi" ✅ / HALT ✅
+
+### 既知の制約・未確認
+
+- GUI 起動の目視確認はヘッドレス環境のため未実施（headless スモーク + pytest で代替）
+- Debug パネルの**完全な初期非表示**は未実施。`test_dock_visibility` の「可視＝checked」契約を維持するため、今回は前面化のみ（完全非表示は UI ラフ確定後）
+- Recent Projects / Templates は枠・カードのみで実機能なし（プロトタイプ）
+
+### 次に行うべき作業
+
+- ユーザーの **UI ラフ受領 → `UI_SPEC_V05.md` セクション 12 へ反映 → 実装範囲確定**
+- ラフ確定後に Debug パネル初期非表示・Port Detail・配線色変更 UI の実装可否を決定
 
 ---
 
@@ -8,8 +300,12 @@
 
 | ファイル | 役割 |
 |---|---|
-| `ROADMAP5.md` | v0.4 Visual Debug Canvas の設計書（**完了**） |
-| `CHECKLIST5.md` | v0.4 Visual Debug Canvas のチェックリスト（**完了**） |
+| `ROADMAP6.md` | v0.5 の設計書（**現在のフェーズ**） |
+| `CHECKLIST6.md` | v0.5 のチェックリスト（**現在のフェーズ**） |
+| `old/ROADMAP5.md` | v0.4 Visual Debug Canvas の設計書（完了・アーカイブ） |
+| `old/CHECKLIST5.md` | v0.4 Visual Debug Canvas のチェックリスト（完了・アーカイブ） |
+| `old/PATCH_V041_ROADMAP.md` | v0.4.1 Patch の設計書（完了・アーカイブ） |
+| `old/PATCH_V041_CHECKLIST.md` | v0.4.1 Patch のチェックリスト（完了・アーカイブ） |
 | `old/ROADMAP4.md` | v0.3 Project & Target Foundation の設計書（完了・アーカイブ） |
 | `old/CHECKLIST4.md` | v0.3 Project & Target Foundation のチェックリスト（完了・アーカイブ） |
 | `HANDOFF.md` | このファイル — セッション間引き継ぎ |
@@ -277,7 +573,7 @@ AKDev と VS Code の関係は **Unity と VS Code のような関係**を目指
 | サンプル確認 | hello.asm UART "Hi" ✅、fib.asm RAM[0x40..0x5C] = フィボナッチ ✅ |
 | pytest | 505 件全通過（v0.3 完了時 159 件 → v0.4 完了時 505 件） |
 
-詳細は `ROADMAP5.md` / `CHECKLIST5.md` を参照。
+詳細は `old/ROADMAP5.md` / `old/CHECKLIST5.md` を参照。
 
 ---
 
@@ -289,19 +585,47 @@ AKDev と VS Code の関係は **Unity と VS Code のような関係**を目指
 
 ---
 
+## v0.4.1 フェーズ完了処理（2026-06-03）
+
+### 完了評価
+
+v0.4.1 Patch — Canvas Routing Polish & Pre-Release Docs を正式完了。
+
+| 評価項目 | 結果 |
+|---|---|
+| 総合テスト（pytest 518 件） | ✅ 2026-06-03 実行・全通過（2.47s） |
+| 配線角修正（update_route 直線化） | ✅ 完了 |
+| Canvas Pan 中ボタン化 | ✅ 完了 |
+| 公開前ドキュメント（QUICKSTART / USER_GUIDE）| ✅ 完了 |
+| CLAUDE.md Rule 4 更新（PHASE COMPLETE 定義）| ✅ 完了 |
+
+### old/ に収納したファイル
+
+| ファイル | 理由 |
+|---|---|
+| `old/ROADMAP5.md` | v0.4 Visual Debug Canvas 完了 |
+| `old/CHECKLIST5.md` | v0.4 Visual Debug Canvas 完了 |
+| `old/PATCH_V041_ROADMAP.md` | v0.4.1 Patch 完了 |
+| `old/PATCH_V041_CHECKLIST.md` | v0.4.1 Patch 完了 |
+
+### 次フェーズの開始点
+
+**v0.5** — `ROADMAP6.md` / `CHECKLIST6.md` を作成済み。主軸と実装範囲はそちらを参照。
+
+---
+
 ## 次回 Claude Code に最初に入れる指示文
 
 ```
 HANDOFF.md を読んで現在の状態を確認してください。
 
 v0.1 / v0.2 / v0.3 / v0.4 / v0.4.1 は全て完了済みです。
-pytest 518 件全通過済み。
+pytest 518 件全通過済み（2026-06-03 確認）。
 
-次は v0.5 の計画を立てます。
-ROADMAP5.md の「v0.5 以降の候補」を参照して、
-ROADMAP6.md / CHECKLIST6.md を作成し、v0.5 の主軸を決めてください。
+ROADMAP6.md / CHECKLIST6.md が作成済みです。
+ROADMAP6.md を読んで v0.5 の主軸を確認し、実装を開始してください。
 
-v0.5 候補（ROADMAP5.md 参照）:
+v0.5 主軸（ROADMAP6.md 参照）:
 - 優先度 A（内部 UI 改善）: 配線色変更 UI / Part Visual 拡張 / Port Detail / 正確な Signal Overlay
 - 優先度 B（外部連携）: VS Code Companion / CALL・RET・IN 命令 / ブレークポイント UI
 - 優先度 C（長期）: KiCad 連携 / C コンパイラ / HDL 合成 / 実機書き込み
@@ -310,6 +634,15 @@ v0.5 候補（ROADMAP5.md 参照）:
 ---
 
 ## セッション記録
+
+### PHASE COMPLETE — v0.4.1（2026-06-03）
+
+- CLAUDE.md Rule 4 に従って v0.4.1 フェーズ完了処理を実施
+- `pytest tests/` 518 件全通過（2.47s）を総合確認として実行・記録
+- `ROADMAP5.md` / `CHECKLIST5.md` / `PATCH_V041_ROADMAP.md` / `PATCH_V041_CHECKLIST.md` を `old/` に収納
+- `HANDOFF.md` を v0.4.1 完了評価・次フェーズ開始点に更新
+- `ROADMAP6.md` / `CHECKLIST6.md` を新規作成（v0.5 計画）
+- 次フェーズ: v0.5 — ROADMAP6.md / CHECKLIST6.md を参照して実装開始
 
 ### セッション 1〜5（2026-05-22）
 

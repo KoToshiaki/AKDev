@@ -3,13 +3,13 @@
 """Main window."""
 from pathlib import Path
 
-from PySide6.QtGui import QAction, QDrag, QKeySequence
+from PySide6.QtGui import QAction, QDrag, QKeySequence, QDesktopServices
 from PySide6.QtWidgets import (
     QMainWindow, QDockWidget, QTreeWidget, QTreeWidgetItem,
     QTextEdit, QPlainTextEdit, QTableWidget, QTableWidgetItem,
     QToolBar, QSplitter, QInputDialog, QFileDialog,
 )
-from PySide6.QtCore import Qt, QMimeData
+from PySide6.QtCore import Qt, QMimeData, QUrl
 
 from asm.asm import AsmError, assemble_ex
 from core.cpu import AK32Part
@@ -55,6 +55,7 @@ class MainWin(QMainWindow):
         self._project_root: Path | None = None
         self._address_map: dict[int, int] = {}
         self._setup_log()            # must be first — others write to self._log
+        self._setup_console()        # Console: program/run output (tabified with Log)
         self._setup_uart_console()   # UART Console panel (tabified with Log)
         self._setup_bus_trace()      # Bus Trace panel (tabified with Log)
         self._setup_memory_viewer()  # Memory Viewer panel (tabified with Log)
@@ -68,6 +69,58 @@ class MainWin(QMainWindow):
         self._setup_menu()           # creates self._a_new/_a_open/_a_save/etc.
         self._setup_toolbar()        # reuses those actions
         self._update_register_view() # populate with initial CPU state
+        self._arrange_initial_layout()  # lead with Log / Properties (Canvas主役)
+
+    # ------------------------------------------------------------------ layout
+
+    def _arrange_initial_layout(self):
+        """v0.5 prototype initial display: lead with Log/Console and Properties.
+
+        Debug panels (Register View / Memory / Bus Trace / UART) stay created
+        and toggleable from the Debug ribbon tab, but are not raised to the
+        front so the Canvas stays the focus.
+        """
+        self._log_dock.raise_()    # bottom tabs -> Log in front
+        self._props_dock.raise_()  # right tabs  -> Properties in front
+        # Patch 2 (H): Grid off at startup (Canvas default stays True; overridden here).
+        self._canvas.set_grid_visible(False)
+        self._a_grid.setChecked(False)
+        # B3: make the canvas read as loaded — center on origin + ready cue.
+        self._canvas.center_origin()
+        self._log.append("Canvas ready")
+        self.statusBar().showMessage("Canvas ready", 3000)
+
+    # ---------------------------------------------------------------- hub entry
+
+    def start_new_project(self):
+        """Entry point used by the Hub to trigger the existing New flow."""
+        self._new_project()
+
+    def start_open_project(self):
+        """Entry point used by the Hub to trigger the existing Open flow."""
+        self._open_project()
+
+    # ----------------------------------------------------------------- wiring
+
+    def _on_mode_changed(self, mode: str):
+        """Sync Wire Mode toggle + status bar with the canvas mode (PATCH_WIRING_V05)."""
+        self._a_wire_mode.setChecked(mode == "wire")
+        if mode == "wire":
+            self.statusBar().showMessage(
+                "Wire Mode: ON — パーツ右クリック「ここから接続を開始」→ 接続先で「ここに接続」"
+                " ／ Esc・Cancel Wire で解除"
+            )
+            self._log.append("Wire Mode: ON")
+        else:
+            self.statusBar().clearMessage()
+
+    def _cancel_wire_action(self):
+        """Cancel Wire ribbon button — always return to design mode (PATCH_WIRING_V05)."""
+        if self._canvas._mode == "wire":
+            self._canvas.set_mode("design")
+            self._log.append("Wire Mode canceled — design へ戻りました")
+        else:
+            self._log.append("Wire Mode は既に OFF です")
 
     # ------------------------------------------------------------------ sim setup
 
@@ -94,7 +147,8 @@ class MainWin(QMainWindow):
     # ------------------------------------------------------------------ setup
 
     def _setup_log(self):
-        self._log_dock = QDockWidget("Log / Console", self)
+        # Patch 2: "Log" = app operations / build results / status notifications.
+        self._log_dock = QDockWidget("Log", self)
         self._log_dock.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.TopDockWidgetArea)
         self._log_dock.setMinimumHeight(100)
         self._log = QTextEdit()
@@ -102,6 +156,20 @@ class MainWin(QMainWindow):
         self._log.setPlaceholderText("Log output...")
         self._log_dock.setWidget(self._log)
         self.addDockWidget(Qt.BottomDockWidgetArea, self._log_dock)
+
+    def _setup_console(self):
+        # Patch 2: "Console" = running program output (run state + UART text).
+        self._console_dock = QDockWidget("Console", self)
+        self._console_dock.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.TopDockWidgetArea)
+        self._console = QPlainTextEdit()
+        self._console.setReadOnly(True)
+        self._console.setPlaceholderText("Program output...")
+        font = self._console.font()
+        font.setFamily("Courier New")
+        self._console.setFont(font)
+        self._console_dock.setWidget(self._console)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self._console_dock)
+        self.tabifyDockWidget(self._log_dock, self._console_dock)
 
     def _setup_uart_console(self):
         self._uart_console_dock = QDockWidget("UART Console", self)
@@ -170,19 +238,37 @@ class MainWin(QMainWindow):
         dock.setWidget(self._parts_tree)
         self._parts_lib_dock = dock
         self.addDockWidget(Qt.LeftDockWidgetArea, dock)
+        # Patch 2 (D): hidden on startup so the Canvas leads; the Parts ribbon
+        # tab toggles it back on. Drag & drop placement is unaffected.
+        dock.hide()
 
     def _on_part_dbl_click(self, item, _col):
         part = item.data(0, Qt.UserRole)
         if part:
             self._canvas.add_part(part)
 
+    def _open_parts_folder(self):
+        """Ribbon 'Open Parts Folder' — open the parts/ directory in the OS file manager."""
+        parts_dir = (Path(__file__).resolve().parent.parent / "parts")
+        if not parts_dir.exists():
+            self._log.append(f"Open Parts Folder: ディレクトリが見つかりません — {parts_dir.as_posix()}")
+            return
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(parts_dir)))
+        self._log.append(f"Open Parts Folder: {parts_dir.as_posix()}")
+
     def _setup_properties(self):
         self._props_dock = QDockWidget("Properties", self)
         self._props_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
         self._props_dock.setMinimumWidth(180)
         self._prop_panel = PropPanel()
+        self._prop_panel.color_changed.connect(self._on_part_color_changed)
         self._props_dock.setWidget(self._prop_panel)
         self.addDockWidget(Qt.RightDockWidgetArea, self._props_dock)
+
+    def _on_part_color_changed(self, node_id: str, color: str):
+        """PATCH_PART_VISUAL_V05: apply a Properties color pick to the node + save."""
+        if self._canvas.set_node_color(node_id, color) and self._project_root is not None:
+            self._persist_system()
 
     def _setup_register_view(self):
         dock = QDockWidget("Register View", self)
@@ -416,6 +502,8 @@ class MainWin(QMainWindow):
         self._sim_bus.clear_trace()
         self._sim_bus.reset_transactions()
         self._log.append(f"Loaded binary to RAM: {len(binary)} bytes")
+        self._console.clear()
+        self._console.appendPlainText(f"[build] loaded {len(binary)} bytes — ready")
         self._address_map = address_map
         self._update_uart_console()
         self._update_register_view()
@@ -476,6 +564,7 @@ class MainWin(QMainWindow):
         self._log.append(
             f"Reset: pc={self._sim_cpu.pc():#06x}  halted={self._sim_cpu.halted()}"
         )
+        self._console.clear()
         self._update_uart_console()
         self._update_register_view()
         self._update_bus_trace()
@@ -499,6 +588,7 @@ class MainWin(QMainWindow):
         if uart_after != uart_before:
             new_chars = uart_after[len(uart_before):]
             self._log.append(f"  UART: {new_chars!r}")
+            self._console.insertPlainText(new_chars)
         self._update_uart_console()
         self._update_register_view()
         self._update_bus_trace()
@@ -513,6 +603,7 @@ class MainWin(QMainWindow):
             return
         self._pause_requested = False
         self._log.append("Run started")
+        self._console.appendPlainText("[run] started\n")
         uart_before = self._sim_uart.output_text()
         for _ in range(1000):
             if self._pause_requested:
@@ -533,11 +624,15 @@ class MainWin(QMainWindow):
                 uart_after = self._sim_uart.output_text()
                 if uart_after != uart_before:
                     self._log.append(f"  UART: {uart_after!r}")
+                    self._console.insertPlainText(uart_after[len(uart_before):])
                 self._log.append(
                     f"HALTED at cycle {self._sim_cycle}"
                     f"  pc={self._sim_cpu.pc():#06x}"
                 )
                 self._log.append("Run stopped (HALTED)")
+                self._console.appendPlainText(
+                    f"\n[run] HALTED at cycle {self._sim_cycle}"
+                )
                 self._update_uart_console()
                 self._update_register_view()
                 self._update_bus_trace()
@@ -548,9 +643,11 @@ class MainWin(QMainWindow):
         uart_after = self._sim_uart.output_text()
         if uart_after != uart_before:
             self._log.append(f"  UART: {uart_after!r}")
+            self._console.insertPlainText(uart_after[len(uart_before):])
         self._log.append(
             f"Run stopped (1000 cycle limit)  pc={self._sim_cpu.pc():#06x}"
         )
+        self._console.appendPlainText("\n[run] stopped (1000 cycle limit)")
         self._update_uart_console()
         self._update_register_view()
         self._update_bus_trace()
@@ -644,9 +741,21 @@ class MainWin(QMainWindow):
         self._a_wire_mode.triggered.connect(
             lambda checked: self._canvas.set_mode("wire" if checked else "design")
         )
-        self._canvas.mode_changed.connect(
-            lambda m: self._a_wire_mode.setChecked(m == "wire")
+        self._canvas.mode_changed.connect(self._on_mode_changed)
+
+        # Wiring ribbon actions (Patch 2 F)
+        self._a_cancel_wire = QAction("Cancel Wire", self)
+        self._a_cancel_wire.triggered.connect(self._cancel_wire_action)
+
+        # Parts ribbon actions (Patch 2 C)
+        self._a_import_part = QAction("Import Part…", self)
+        self._a_import_part.setEnabled(False)   # not a dead button: clearly disabled
+        self._a_import_part.setToolTip(
+            "外部パーツ定義の取り込み（次パッチで対応予定）"
         )
+
+        self._a_open_parts_folder = QAction("Open Parts Folder", self)
+        self._a_open_parts_folder.triggered.connect(self._open_parts_folder)
 
         # Register with the window so keyboard shortcuts remain active
         for a in (self._a_build, self._a_reset, self._a_step,
@@ -656,25 +765,33 @@ class MainWin(QMainWindow):
             self.addAction(a)
 
     def _setup_toolbar(self):
+        # v0.5 UI Prototype Patch 2 — purpose-based ribbon tabs.
+        # Project tab removed (A): New/Open/Save/Save As stay in the File menu.
         self._ribbon = RibbonBar()
-        self._ribbon.add_page("File", [
-            self._a_new, self._a_open, self._a_save, self._a_save_as,
-        ])
-        self._ribbon.add_page("Build / Run", [
-            self._a_build, self._a_reset, self._a_run, self._a_step, self._a_pause,
-        ])
-        self._ribbon.add_page("View", [
+        self._ribbon.add_page("Parts", [           # C: meaningful operations only
             self._parts_lib_dock.toggleViewAction(),
-            self._props_dock.toggleViewAction(),
-            self._reg_view_dock.toggleViewAction(),
-            self._log_dock.toggleViewAction(),
-            self._uart_console_dock.toggleViewAction(),
-            self._bus_trace_dock.toggleViewAction(),
-            self._mem_viewer.toggleViewAction(),
-            self._a_zoom_in, self._a_zoom_out, self._a_zoom_reset, self._a_fit,
-            self._a_grid, self._a_snap, self._a_wire_mode,
+            self._a_import_part,
+            self._a_open_parts_folder,
         ])
-        self._ribbon.add_page("Tools", [])   # placeholder for VS Code integration
+        self._ribbon.add_page("Wiring", [
+            self._a_wire_mode, self._a_cancel_wire,
+        ])
+        self._ribbon.add_page("Run", [
+            self._a_build, self._a_run, self._a_step, self._a_reset, self._a_pause,
+        ])
+        self._ribbon.add_page("View", [            # H: no Zoom In/Out (wheel zoom stays)
+            self._a_grid, self._a_snap,
+            self._a_zoom_reset, self._a_fit,
+            self._props_dock.toggleViewAction(),
+        ])
+        self._ribbon.add_page("Debug", [           # I: Log and Console separated
+            self._reg_view_dock.toggleViewAction(),
+            self._mem_viewer.toggleViewAction(),
+            self._bus_trace_dock.toggleViewAction(),
+            self._uart_console_dock.toggleViewAction(),
+            self._log_dock.toggleViewAction(),
+            self._console_dock.toggleViewAction(),
+        ])
 
         tb = QToolBar("Ribbon", self)
         tb.setMovable(False)

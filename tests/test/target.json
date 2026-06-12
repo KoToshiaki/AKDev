@@ -1,0 +1,17 @@
+{
+  "target": {
+    "name": "AK32 Baremetal",
+    "isa": "ak32",
+    "cpu": "ak32",
+    "runtime": "baremetal",
+    "entry": "src/main.asm",
+    "output": "build/out/main.bin",
+    "load_address": "0x0000",
+    "entry_point": "0x0000"
+  },
+  "build": {
+    "type": "internal_assembler",
+    "input": "src/main.asm",
+    "output": "build/out/main.bin"
+  }
+}

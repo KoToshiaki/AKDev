@@ -543,6 +543,20 @@ System Canvas 上のパーツノードにバス最終値をオーバーレイ表
 
 ---
 
+## v0.4.1 Patch（2026-05-30 完了）
+
+v0.4 公開前修正パッチ。詳細は `PATCH_V041_ROADMAP.md` / `PATCH_V041_CHECKLIST.md` を参照。
+
+| 修正内容 | 概要 |
+|---|---|
+| 配線ルートの角修正 | `update_route` 直線化・ポート位置から配線 |
+| Canvas Pan 中ボタン化 | RightButton → MiddleButton、右クリックメニュー干渉解消 |
+| 公開前ドキュメント追加 | `docs/QUICKSTART.md` / `docs/USER_GUIDE.md` / README 更新 |
+
+pytest: 505 件 → **518 件**（+13 件）
+
+---
+
 ## v0.5 以降の候補
 
 ### v0.5 候補（次の主作業 — 計画は別途 ROADMAP6.md / CHECKLIST6.md で作成）

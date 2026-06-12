@@ -1,0 +1,17 @@
+{
+  "tools": {
+    "vscode": {
+      "command": "code",
+      "args": [
+        "{project_root}"
+      ]
+    },
+    "kicad": {
+      "command": "kicad",
+      "args": [
+        "{project_root}/board/{project_name}.kicad_pro"
+      ],
+      "enabled": false
+    }
+  }
+}
