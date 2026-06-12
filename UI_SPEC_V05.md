@@ -684,6 +684,72 @@ Wiring を既存ノードエディタ（Shader Graph / Blueprint / Node-RED 等�
 - 実装: Canvas の `_visual_port_at` / `_start_port_drag` / `_update_port_drag_preview` /
   `_finish_port_drag` / `_cancel_port_drag`。visual port は独立 item にせず幾何ヒットテスト。
 
+### Hover Feedback（PATCH_WIRE_HOVER_FEEDBACK_V05）
+
+接続操作の対象を、クリック前にマウスホバーで視認できるようにする（**視覚のみ**。
+選択・削除・対話移動は含まない）。
+
+| 対象 | ホバー時の見た目 | 内部状態 |
+|---|---|---|
+| visual port | 明るく + 白枠 + 少し拡大して描画 | `Canvas._hover_vp = {"node_id","vp_id"}` / `PartNode.set_hover_port()` |
+| wire | 少し太く + 明るく（active と両立、active 優先）| `ConnectionLine.set_hovered()` / `Canvas._hover_conn_id` |
+| port-drag 接続先候補 | カーソル下の**別ノード**をアクセント色外枠で強調 | `Canvas._hover_drop_node_id` / `PartNode.set_drop_highlight()` |
+
+- hover 更新はボタン非押下時の `mouseMoveEvent` →`_update_hover()`。port が wire より優先。
+- Canvas から離れると `leaveEvent` で hover 解除。
+- port-drag 中はカーソル下ノードを `_update_drop_target()` で候補化（**同一ノードは除外**）。
+  port-drag 終了 / キャンセルで `_cancel_port_drag()` が drop highlight を必ず解除。
+- pen は `ConnectionLine._apply_pen()` で base / hover / active を集中管理（active が hover に優先）。
+- **今回やらないこと**: wire 選択・Delete Wire・visual port 対話移動・接続可否の型判定。
+
+### Wire Select & Delete（PATCH_WIRE_SELECT_DELETE_V05）
+
+接続済み wire を選択し、不要な接続を削除できる。
+
+| 操作 | 動作 |
+|---|---|
+| design mode で wire を左クリック | その wire を選択（`Canvas._selected_conn_id`）|
+| 別 wire を左クリック | 選択が移る |
+| 空白 / ノードを左クリック | wire 選択を解除（ノードクリックはノード選択優先）|
+| visual port クリック / port-drag 開始 | wire 選択しない（port-drag を優先）|
+| Delete キー（wire 選択中）| その wire のみ削除。選択なしは従来のノード削除 |
+| wire 近くで右クリック | wire を選択し「Delete Wire」メニュー → 削除 |
+
+- 表示優先度は **selected > active > hover > normal**（`ConnectionLine._apply_pen()`）。
+  selected は最も強い強調（白・最太）で、signal overlay（active）と重なっても selected を優先。
+- 削除は `Canvas._remove_connection(conn_id)` に集約: connection data + ConnectionLine を除去し、
+  selected/hover を解除、`_prune_orphan_visual_ports()`、`update_connections()` を呼ぶ。
+  **fan-out 元の visual port が他 connection から参照されていれば残す**（orphan のみ prune）。
+- 選択は hover とは独立した状態。`_set_hover_conn()` は selected を解除しない。
+- 保存はノード削除と同じく既存の保存導線（保存時 `export_parts`/`export_canvas`）に委ねる。
+- **今回やらないこと**: wire Properties / 色変更 UI / ラベル / 複数選択 / Undo / z-order 調整。
+
+### Visual Port Move（PATCH_VISUAL_PORT_MOVE_V05）
+
+visual port を PartNode の辺上で対話的に動かせる。
+
+| 操作 | 動作 |
+|---|---|
+| visual port 上で **Alt + 左ドラッグ** | port move 開始（移動中は専用色リングで強調）|
+| ドラッグ中 | カーソル下の最近辺に拘束し side/offset を更新、接続 wire がリアルタイム追従 |
+| マウス release | 移動確定 |
+| Esc / 右クリック | キャンセル（移動前の side/offset へ復元）|
+| visual port 上で **Alt なし**左ドラッグ | 従来どおり port-drag connect（移動ではない）|
+| locked=true の visual port | 移動開始しない（ログ "Visual port is locked" 1 行）|
+
+- 位置は **辺拘束**: マウス scene 座標を PartNode ローカルへ変換し、最近辺で
+  `side`（left/right/top/bottom）、辺に沿った距離で `offset` を決め、ノードサイズ内に clamp。
+  保存値は side + offset のまま（scene 絶対座標は持たない）。`PartNode.edge_from_local()` /
+  `node_size()`（現状固定 `_NODE_W`/`_NODE_H`、将来のサイズ変更に備えた hook）。
+- 状態は `Canvas._port_move`（node_id / vp_id / original・current side+offset）。
+  `_start_port_move` / `_update_port_move` / `_finish_port_move` / `_cancel_port_move`。
+  `_port_drag`（接続）と `_port_move`（移動）は別状態。
+- fan-out（共有 vp）を動かすと、その vp を参照する全 wire が追従（端点は vp 位置参照のため自動）。
+- 保存はノード移動と同じく自動 persist せず、保存時の `export_parts`/`export_canvas` に委ねる。
+  export/import round-trip で移動後の side/offset を維持。
+- 表示優先度（visual port）は **moving > hover > normal**。drop target highlight とは別状態。
+- **今回やらないこと**: 通常左ドラッグ移動 / 複数選択 / 削除 UI / rename / サイズ変更 / Undo。
+
 ---
 
 ## 12. ユーザー UI ラフ反映欄

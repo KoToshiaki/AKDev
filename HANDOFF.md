@@ -1,6 +1,156 @@
 # AKDev 引き継ぎメモ
 
-更新日: 2026-06-07（PATCH_PORT_DRAG_CONNECT_V05 — Port Drag Connect）
+更新日: 2026-06-13（PATCH_VISUAL_PORT_MOVE_V05 — Visual Port Move）
+
+---
+
+## 現在の状況（PATCH_VISUAL_PORT_MOVE_V05 — Visual Port Move）
+
+**フェーズ: v0.5（進行中）。visual port を Alt + 左ドラッグで辺上に移動できるようにした。**
+
+### 完了した作業
+
+| 項目 | 内容 |
+|---|---|
+| Alt + 左ドラッグ移動 | visual port 上で Alt + 左ドラッグ → port move 開始。Alt なしは従来の port-drag connect。`Canvas._port_move`（node_id / vp_id / original・current side+offset）+ `_start/_update/_finish/_cancel_port_move` |
+| 辺拘束 | `PartNode.edge_from_local()` がマウスローカル座標から最近辺の side と clamp 済み offset を返す。`node_size()`（固定 `_NODE_W`/`_NODE_H`、将来サイズ変更の hook）。保存は side + offset のまま（scene 絶対座標なし）|
+| wire 追従 | `_update_port_move` が side/offset 更新 + `update_connections()`。curved wire 端点が新位置に一致。**fan-out 共有 vp を動かすと参照する全 wire が追従** |
+| 確定 / 取消 | release で確定、Esc / 右クリックで元の side/offset へ復元（`_cancel_port_move`）|
+| locked | locked vp は移動開始しない（ログ "Visual port is locked" 1 行のみ）|
+| 表示 | 移動中 vp は専用色リング（`_PORT_MOVE_COLOR`）で最強強調。優先度 moving > hover > normal。drop highlight とは別状態 |
+| 互換 | port-drag connect / wire 選択・削除 / 右クリック接続 / curved wire / hover / export-import は不変 |
+
+### 作成したパッチ文書
+
+- `PATCH_VISUAL_PORT_MOVE_V05_ROADMAP.md` / `PATCH_VISUAL_PORT_MOVE_V05_CHECKLIST.md`
+
+### テスト結果
+
+- `pytest tests/` **685 件全通過**（PATCH_WIRE_SELECT_DELETE_V05 完了時 668 → +17）
+- 新規 `tests/test_visual_port_move_v05.py`（17 件）
+- 既存 668 件は無改変で通過
+- headless 検証: Alt → move / Alt なし → port-drag ✅ / locked は不可 ✅ / side/offset・scene 座標更新 ✅ / wire 端点・fan-out 全 wire 追従 ✅ / release 確定・Esc/右クリックで復元 ✅ / move 中 node/wire 選択が誤発火しない ✅ / export-import で移動後 side/offset 維持 ✅
+
+### 互換性メモ
+
+- 保存は visual port 移動時に自動 persist せず、ノード移動・wire 削除と同じく保存時の
+  `export_parts`/`export_canvas` に委ねる（MainWin の保存導線は変更していない）。
+
+### まだ残っている問題（将来）
+
+- visual port の通常左ドラッグ移動 / 複数選択 / 削除 UI / rename は未実装。
+- wire 色変更 UI / wire ラベル / 接続可否の型判定（constraint）は未実装。
+- Part Visual サイズ変更（`node_size()` を可変化）は別パッチ。
+- legacy `_port_dot` の完全削除 / `ui/canvas.py` 分割は将来。
+- GUI 目視確認はヘッドレス環境のため未実施（下記「UI 確認点」参照）。
+
+### UI 上でユーザーが確認すべき点
+
+- visual port を Alt + 左ドラッグするとリングが付き、辺に沿って動くか。接続 wire が追従するか。
+- Alt なしの左ドラッグは従来どおり接続線（port-drag）が出るか。
+- マウスを離すと位置が確定するか。Esc / 右クリックで元の位置に戻るか。
+- locked にした visual port は Alt + ドラッグしても動かないか。
+- fan-out（同じ port から複数 wire）の port を動かすと全 wire が追従するか。
+
+### 次に行うべき作業
+
+- ユーザー判断: wire 色変更 UI／Port Detail パネル／Part Visual サイズ変更／UI ラフ受領 のいずれへ進むか
+
+---
+
+## 現在の状況（PATCH_WIRE_SELECT_DELETE_V05 — Wire Select & Delete）
+
+**フェーズ: v0.5（進行中）。作成済み wire を選択・削除できるようにした。**
+
+### 完了した作業
+
+| 項目 | 内容 |
+|---|---|
+| wire 選択 | design mode の左クリックで wire 選択（`Canvas._selected_conn_id` / `_set_selected_conn`）。`ConnectionLine.set_selected/is_selected`。visual port / PartNode クリックは従来優先、空白で解除 |
+| 表示優先度 | `ConnectionLine._apply_pen()` を **selected > active > hover > normal** に拡張。selected は白・最太で signal overlay（active）と重なっても判別可能 |
+| 削除 API | `Canvas._remove_connection(conn_id)` 新設。data + ConnectionLine 除去、selected/hover 解除、`_prune_orphan_visual_ports()`、`update_connections()`。**fan-out 元 vp が他 conn から参照されていれば残す** |
+| Delete キー | 選択 wire（かつ port-drag でない）→ wire 削除、なければ従来のノード削除 |
+| 右クリック | wire 近くで「Delete Wire」メニュー。PartNode 上 / port-drag 中 / wire mode は従来どおり |
+| 整合 | `import_canvas`(clear) と `_remove_node`（選択 wire がノード削除で消えた場合）で選択を解除 |
+| 互換 | 右クリック接続・port-drag 接続・curved wire・hover feedback・signal overlay・export/import は不変 |
+
+### 作成したパッチ文書
+
+- `PATCH_WIRE_SELECT_DELETE_V05_ROADMAP.md` / `PATCH_WIRE_SELECT_DELETE_V05_CHECKLIST.md`
+
+### テスト結果
+
+- `pytest tests/` **668 件全通過**（PATCH_WIRE_HOVER_FEEDBACK_V05 完了時 649 → +19）
+- 新規 `tests/test_wire_select_delete_v05.py`（19 件）
+- 既存 649 件は無改変で通過（`set_active`/`set_hovered` の pen 挙動を優先度拡張後も維持）
+- headless 検証: クリック選択・選択移動・空白で解除 ✅ / Delete で wire 削除・選択なしはノード削除・port-drag 中は無効 ✅ / 削除で data+item 消去・orphan prune・共有 fan-out vp 残存 ✅ / selected > active > hover 優先度 ✅ / 右クリック接続・port-drag 接続・export-import 不変 ✅
+
+### 互換性メモ
+
+- 保存は wire 削除時に自動 persist せず、ノード削除と同じく保存時の `export_parts`/`export_canvas` に委ねる（MainWin の既存導線を変更していない）。
+
+### まだ残っている問題（将来）
+
+- wire Properties / 色変更 UI / ラベル / 複数 wire 選択 / Undo・Redo / z-order 調整は未実装。
+- visual port の対話ドラッグ移動 / 接続可否の型判定（constraint）は未実装。
+- legacy `_port_dot` の完全削除は将来。
+- GUI 目視確認はヘッドレス環境のため未実施（下記「UI 確認点」参照）。
+
+### UI 上でユーザーが確認すべき点
+
+- wire を左クリックすると白く太く強調されるか。別 wire / 空白クリックで選択が移る・消えるか。
+- 選択中 wire で Delete を押すとその wire だけ消えるか。選択がなければノードが消えるか。
+- wire を右クリックすると「Delete Wire」が出て削除できるか。PartNode 右クリックは従来メニューのままか。
+- Run 中の signal overlay（青く光る）と選択中 wire が重なっても、選択が判別できるか。
+
+### 次に行うべき作業
+
+- ユーザー判断: wire 色変更 UI／visual port 対話ドラッグ移動／UI ラフ受領 のいずれへ進むか
+
+---
+
+## 現在の状況（PATCH_WIRE_HOVER_FEEDBACK_V05 — Hover Feedback）
+
+**フェーズ: v0.5（進行中）。Wiring / Port Drag Connect に hover feedback（視覚のみ）を追加。**
+
+### 完了した作業
+
+| 項目 | 内容 |
+|---|---|
+| visual port hover | port に近づくと明るく + 白枠 + 拡大表示。`Canvas._hover_vp` + `PartNode.set_hover_port/hover_port`。`mouseMoveEvent`（ボタン非押下時）で `_visual_port_at` から更新、`leaveEvent` で解除 |
+| wire hover | wire に近づくと太く + 明るく。`ConnectionLine.set_hovered/is_hovered`。pen を `_apply_pen()` で集中管理し signal overlay（active）と両立（**active 優先**）。`Canvas._connection_at`（path 距離判定）/ `_set_hover_conn` |
+| drop highlight | port-drag 中、カーソル下の**別ノード**をアクセント色（#3B82F6）外枠で候補表示。`Canvas._hover_drop_node_id` + `PartNode.set_drop_highlight`。`_update_drop_target` が同一ノードを除外、`_cancel_port_drag` が finish/cancel 両方で必ず解除 |
+| ログ補助 | port-drag 開始時に 1 行のみ（mouseMove ではログしない）|
+| 互換 | 右クリック接続・port-drag 接続・curved wire・export/import・signal overlay は不変 |
+
+### 作成したパッチ文書
+
+- `PATCH_WIRE_HOVER_FEEDBACK_V05_ROADMAP.md` / `PATCH_WIRE_HOVER_FEEDBACK_V05_CHECKLIST.md`
+
+### テスト結果
+
+- `pytest tests/` **649 件全通過**（PATCH_PORT_DRAG_CONNECT_V05 完了時 630 → +19）
+- 新規 `tests/test_wire_hover_feedback_v05.py`（19 件）
+- 既存 630 件は無改変で通過（`set_active` の pen 復元挙動を `_apply_pen` リファクタ後も維持）
+- headless 検証: visual port hover 更新/解除 ✅ / wire hover pen 変化・active 優先 ✅ / drop highlight 別ノード ON・同一ノード除外・finish/cancel で解除 ✅ / port-drag 接続・右クリック接続・export-import 不変 ✅
+
+### まだ残っている問題（将来）
+
+- wire 選択 / Delete Wire / visual port の対話ドラッグ移動 / 空ポートからのドラッグ開始は未実装。
+- 接続可否の厳密な型判定（Connection constraint）は未実装。
+- legacy `_port_dot` の完全削除は将来。
+- GUI 目視確認はヘッドレス環境のため未実施（下記「UI 確認点」参照）。
+
+### UI 上でユーザーが確認すべき点
+
+- visual port にカーソルを近づけると port が明るく拡大するか。
+- wire にカーソルを近づけると太く明るくなるか。Run 中の signal overlay（active）と重なっても破綻しないか。
+- visual port からドラッグ中、別パーツに乗るとアクセント色枠が出るか。元パーツには出ないか。
+- ドラッグを離す / Esc / 右クリックで枠が確実に消えるか。
+
+### 次に行うべき作業
+
+- ユーザー判断: wire 選択 + Delete Wire／visual port 対話ドラッグ移動／UI ラフ受領 のいずれへ進むか
 
 ---
 

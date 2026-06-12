@@ -53,6 +53,9 @@ _KIND_COLORS = {
 }
 _KIND_PEN_WIDTH     = {"bus": 3.0, "signal": 1.5, "clock": 1.5, "reset": 1.5}
 _WIRE_PREVIEW_COLOR = QColor("#ffaa00")
+_DROP_HL_COLOR      = "#3B82F6"   # accent outline for port-drag drop candidate
+_WIRE_SELECT_COLOR  = "#ffffff"   # selected wire highlight (strongest)
+_PORT_MOVE_COLOR    = "#ffdd33"   # ring around a visual port being moved (Alt+drag)
 
 _DOT_RADIUS  = 5
 _DOT_COLOR   = QColor("#4a90d9")   # blue
@@ -131,6 +134,9 @@ class ConnectionLine(QGraphicsPathItem):
         self._kind         = kind
         c = QColor(color) if color else QColor(_KIND_COLORS.get(kind, "#aaaaaa"))
         self._base_pen = QPen(c, _KIND_PEN_WIDTH.get(kind, 1.5))
+        self._active   = False
+        self._hovered  = False
+        self._selected = False
         self.setPen(self._base_pen)
         self.setZValue(-1)
 
@@ -146,13 +152,43 @@ class ConnectionLine(QGraphicsPathItem):
     def kind(self) -> str:
         return self._kind
 
-    def set_active(self, active: bool) -> None:
-        """Highlight the line when active (bus transaction occurred)."""
-        if active:
+    def _apply_pen(self) -> None:
+        """Resolve the pen from selected/active/hover state.
+
+        Priority: selected > active > hover > base, so a selected wire stays
+        clearly marked even when a signal overlay (active) is also lit.
+        """
+        if self._selected:
+            self.setPen(QPen(QColor(_WIRE_SELECT_COLOR), self._base_pen.widthF() + 2.5))
+        elif self._active:
             bright = self._base_pen.color().lighter(160)
             self.setPen(QPen(bright, self._base_pen.widthF() + 1.5))
+        elif self._hovered:
+            bright = self._base_pen.color().lighter(140)
+            self.setPen(QPen(bright, self._base_pen.widthF() + 1.0))
         else:
             self.setPen(self._base_pen)
+
+    def set_active(self, active: bool) -> None:
+        """Highlight the line when active (bus transaction occurred)."""
+        self._active = bool(active)
+        self._apply_pen()
+
+    def set_hovered(self, hovered: bool) -> None:
+        """Highlight the line on mouse hover (subtler than active)."""
+        self._hovered = bool(hovered)
+        self._apply_pen()
+
+    def is_hovered(self) -> bool:
+        return self._hovered
+
+    def set_selected(self, selected: bool) -> None:
+        """Mark the line as the selected wire (strongest highlight)."""
+        self._selected = bool(selected)
+        self._apply_pen()
+
+    def is_selected(self) -> bool:
+        return self._selected
 
     def update_route(self, points: list) -> None:
         """Draw straight segments through the given corner points.
@@ -274,6 +310,11 @@ class PartNode(QGraphicsItem):
         )
         # Dynamic Visual Ports (PATCH_WIRING_PORTS_V05): created on connect; 0 initially.
         self._visual_ports: list[dict] = []
+        # Hover feedback (PATCH_WIRE_HOVER_FEEDBACK_V05): transient display-only state.
+        self._hover_vp_id: "str | None" = None   # visual port under the cursor
+        self._drop_highlight: bool      = False  # port-drag connect candidate
+        # Visual port move (PATCH_VISUAL_PORT_MOVE_V05): vp currently being dragged.
+        self._moving_vp_id: "str | None" = None
         # Legacy single port dot: kept for sim/_on_port_click + existing tests, but
         # HIDDEN on the canvas so parts show 0 visible ports until wired.
         self._port_dot = PortDot(node_id, "bus", self)
@@ -357,6 +398,62 @@ class PartNode(QGraphicsItem):
             return None
         return self.pos() + self._vp_local(vp)
 
+    def node_size(self) -> tuple:
+        """Return the node's (width, height). Fixed for now; future-proof hook."""
+        return (_NODE_W, _NODE_H)
+
+    def edge_from_local(self, local: QPointF) -> tuple:
+        """Map a local (item-space) point to the nearest edge (side, offset).
+
+        offset is the distance along that edge, clamped to the node size, so a
+        visual port stays constrained to the part's border (no free scene coords).
+        """
+        w, h = self.node_size()
+        x = max(0.0, min(local.x(), float(w)))
+        y = max(0.0, min(local.y(), float(h)))
+        d_left, d_right, d_top, d_bottom = x, w - x, y, h - y
+        m = min(d_left, d_right, d_top, d_bottom)
+        if m == d_left:
+            return ("left", round(y, 2))
+        if m == d_right:
+            return ("right", round(y, 2))
+        if m == d_top:
+            return ("top", round(x, 2))
+        return ("bottom", round(x, 2))
+
+    def set_moving_port(self, vp_id: "str | None") -> None:
+        """Mark a visual port as being moved (None = none). Repaints on change."""
+        if vp_id == self._moving_vp_id:
+            return
+        self._moving_vp_id = vp_id
+        self.update()
+
+    def moving_port(self) -> "str | None":
+        return self._moving_vp_id
+
+    # -------------------------------------------------- hover feedback (PATCH_WIRE_HOVER_FEEDBACK_V05)
+
+    def set_hover_port(self, vp_id: "str | None") -> None:
+        """Mark a visual port as hovered (None = none). Repaints on change."""
+        if vp_id == self._hover_vp_id:
+            return
+        self._hover_vp_id = vp_id
+        self.update()
+
+    def hover_port(self) -> "str | None":
+        return self._hover_vp_id
+
+    def set_drop_highlight(self, enabled: bool) -> None:
+        """Highlight this node as a port-drag connection candidate. Repaints on change."""
+        enabled = bool(enabled)
+        if enabled == self._drop_highlight:
+            return
+        self._drop_highlight = enabled
+        self.update()
+
+    def drop_highlight(self) -> bool:
+        return self._drop_highlight
+
     def itemChange(self, change, value):
         if (change == QGraphicsItem.GraphicsItemChange.ItemPositionChange
                 and self._snap_enabled):
@@ -403,11 +500,28 @@ class PartNode(QGraphicsItem):
         )
 
         # Visual ports (created on connect) — drawn as small kind-colored dots.
-        painter.setPen(QPen(QColor("#333333"), 1))
+        # Priority: moving (Alt-drag) > hovered > normal.
         for vp in self._visual_ports:
-            col = _KIND_COLORS.get(vp.get("kind", "bus"), "#aaaaaa")
-            painter.setBrush(QBrush(QColor(col)))
-            painter.drawEllipse(self._vp_local(vp), 5.0, 5.0)
+            col = QColor(_KIND_COLORS.get(vp.get("kind", "bus"), "#aaaaaa"))
+            vpid = vp.get("id")
+            if vpid == self._moving_vp_id:
+                painter.setPen(QPen(QColor(_PORT_MOVE_COLOR), 2.5))
+                painter.setBrush(QBrush(col.lighter(160)))
+                painter.drawEllipse(self._vp_local(vp), 8.0, 8.0)
+            elif vpid == self._hover_vp_id:
+                painter.setPen(QPen(QColor("#ffffff"), 2))
+                painter.setBrush(QBrush(col.lighter(140)))
+                painter.drawEllipse(self._vp_local(vp), 7.0, 7.0)
+            else:
+                painter.setPen(QPen(QColor("#333333"), 1))
+                painter.setBrush(QBrush(col))
+                painter.drawEllipse(self._vp_local(vp), 5.0, 5.0)
+
+        # Port-drag drop candidate — accent outline drawn on top.
+        if self._drop_highlight:
+            painter.setPen(QPen(QColor(_DROP_HL_COLOR), 2.5))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(-3, -3, _NODE_W + 6, _NODE_H + 6, 8, 8)
 
 
 class Canvas(QGraphicsView):
@@ -445,6 +559,14 @@ class Canvas(QGraphicsView):
         # Port-drag connect (PATCH_PORT_DRAG_CONNECT_V05): drag from a visual port.
         self._port_drag: "dict | None"      = None    # {node_id, vp_id, logical_port, side}
         self._port_drag_preview: "QGraphicsPathItem | None" = None
+        # Hover feedback (PATCH_WIRE_HOVER_FEEDBACK_V05): display-only transient state.
+        self._hover_vp:            "dict | None" = None   # {"node_id", "vp_id"}
+        self._hover_conn_id:       "str | None"  = None   # hovered ConnectionLine id
+        self._hover_drop_node_id:  "str | None"  = None   # port-drag drop candidate
+        # Wire selection (PATCH_WIRE_SELECT_DELETE_V05): independent of hover.
+        self._selected_conn_id:    "str | None"  = None   # selected ConnectionLine id
+        # Visual port move (PATCH_VISUAL_PORT_MOVE_V05): Alt+drag a vp along an edge.
+        self._port_move: "dict | None" = None  # {node_id, vp_id, original/current side+offset}
         self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setAcceptDrops(True)
@@ -817,9 +939,126 @@ class Canvas(QGraphicsView):
                     return (node, vp)
         return None
 
+    def _connection_at(self, scene_pos: QPointF, slack: float = 6.0) -> "ConnectionLine | None":
+        """Return the ConnectionLine whose path passes near scene_pos, else None."""
+        for item in self._conn_items.values():
+            path = item.path()
+            if path.isEmpty():
+                continue
+            for i in range(25):
+                pt = path.pointAtPercent(i / 24.0)
+                if (abs(pt.x() - scene_pos.x()) <= slack
+                        and abs(pt.y() - scene_pos.y()) <= slack):
+                    return item
+        return None
+
+    # -------------------------------------------------- hover feedback (PATCH_WIRE_HOVER_FEEDBACK_V05)
+
+    def _set_hover_vp(self, node: "PartNode", vp: dict) -> None:
+        """Mark (node, vp) as the hovered visual port."""
+        if (self._hover_vp is not None
+                and self._hover_vp["node_id"] == node.node_id()
+                and self._hover_vp["vp_id"] == vp["id"]):
+            return
+        self._clear_hover_vp()
+        node.set_hover_port(vp["id"])
+        self._hover_vp = {"node_id": node.node_id(), "vp_id": vp["id"]}
+
+    def _clear_hover_vp(self) -> None:
+        if self._hover_vp is None:
+            return
+        node = self.get_node(self._hover_vp["node_id"])
+        if node is not None:
+            node.set_hover_port(None)
+        self._hover_vp = None
+
+    def _set_hover_conn(self, conn_id: "str | None") -> None:
+        """Mark a ConnectionLine (by id) as hovered; None clears."""
+        if conn_id == self._hover_conn_id:
+            return
+        old = self._conn_items.get(self._hover_conn_id)
+        if old is not None:
+            old.set_hovered(False)
+        new = self._conn_items.get(conn_id)
+        if new is not None:
+            new.set_hovered(True)
+        self._hover_conn_id = conn_id
+
+    # -------------------------------------------------- wire selection (PATCH_WIRE_SELECT_DELETE_V05)
+
+    def _set_selected_conn(self, conn_id: "str | None") -> None:
+        """Select a ConnectionLine (by id); None clears. Independent of hover."""
+        if conn_id == self._selected_conn_id:
+            return
+        old = self._conn_items.get(self._selected_conn_id)
+        if old is not None:
+            old.set_selected(False)
+        new = self._conn_items.get(conn_id)
+        if new is not None:
+            new.set_selected(True)
+        self._selected_conn_id = conn_id
+
+    def selected_conn_id(self) -> "str | None":
+        return self._selected_conn_id
+
+    def _remove_connection(self, conn_id: str) -> bool:
+        """Single source of truth for removing one connection (data + line item).
+
+        Clears selection/hover pointing at it, prunes only orphaned visual ports
+        (shared fan-out ports referenced by other connections are kept), and
+        refreshes the remaining wires. Returns True if a connection was removed.
+        """
+        if not any(c["id"] == conn_id for c in self._connections):
+            return False
+        if self._selected_conn_id == conn_id:
+            self._selected_conn_id = None
+        if self._hover_conn_id == conn_id:
+            self._hover_conn_id = None
+        line = self._conn_items.pop(conn_id, None)
+        if line is not None and line.scene() is not None:
+            self.scene().removeItem(line)
+        self._connections = [c for c in self._connections if c["id"] != conn_id]
+        self._prune_orphan_visual_ports()
+        self.update_connections()
+        self._log(f"Removed wire [{conn_id}]")
+        return True
+
+    def _update_hover(self, scene_pos: QPointF) -> None:
+        """Refresh visual-port / wire hover from a scene position (no drag active)."""
+        hit = self._visual_port_at(scene_pos)
+        if hit is not None:
+            self._set_hover_vp(hit[0], hit[1])
+            self._set_hover_conn(None)   # a port takes priority over a wire underneath
+            return
+        self._clear_hover_vp()
+        conn = self._connection_at(scene_pos)
+        self._set_hover_conn(conn.conn_id() if conn is not None else None)
+
+    def _set_drop_highlight(self, node_id: "str | None") -> None:
+        """Highlight node_id as the port-drag drop candidate; None clears."""
+        if node_id == self._hover_drop_node_id:
+            return
+        old = self.get_node(self._hover_drop_node_id) if self._hover_drop_node_id else None
+        if old is not None:
+            old.set_drop_highlight(False)
+        new = self.get_node(node_id) if node_id else None
+        if new is not None:
+            new.set_drop_highlight(True)
+        self._hover_drop_node_id = node_id
+
+    def _update_drop_target(self, node_id: "str | None") -> None:
+        """Set the drop candidate, excluding the port-drag source (same part)."""
+        if self._port_drag is None:
+            self._set_drop_highlight(None)
+            return
+        if node_id == self._port_drag.get("node_id"):
+            node_id = None   # cannot connect a part to itself
+        self._set_drop_highlight(node_id)
+
     def _start_port_drag(self, node: "PartNode", vp: dict) -> None:
         """Begin dragging a new wire out of an existing visual port."""
         self._cancel_port_drag()
+        self._log("Wire: drag to another part to connect")
         self._port_drag = {
             "node_id":      node.node_id(),
             "vp_id":        vp["id"],
@@ -870,12 +1109,86 @@ class Canvas(QGraphicsView):
         return True
 
     def _cancel_port_drag(self) -> None:
-        """Abort a port drag, removing the preview."""
+        """Abort a port drag, removing the preview and any drop highlight."""
         if (self._port_drag_preview is not None
                 and self._port_drag_preview.scene() is not None):
             self.scene().removeItem(self._port_drag_preview)
         self._port_drag_preview = None
         self._port_drag = None
+        self._set_drop_highlight(None)
+
+    # ------------------------------------------ visual port move (PATCH_VISUAL_PORT_MOVE_V05)
+
+    def _start_port_move(self, node: "PartNode", vp: dict) -> bool:
+        """Begin an Alt+drag move of a visual port. Rejected if locked. Returns True if started."""
+        if vp.get("locked"):
+            self._log("Visual port is locked")
+            return False
+        self._cancel_port_drag()   # ensure a port-drag connect is not also active
+        side   = vp.get("side", "right")
+        offset = float(vp.get("offset", 0.0))
+        self._port_move = {
+            "node_id":         node.node_id(),
+            "vp_id":           vp["id"],
+            "original_side":   side,
+            "original_offset": offset,
+            "current_side":    side,
+            "current_offset":  offset,
+        }
+        node.set_moving_port(vp["id"])
+        self._log("Visual port: drag to move along the part edge")
+        return True
+
+    def _update_port_move(self, scene_pos: QPointF) -> None:
+        """Constrain the moving visual port to the nearest edge under the cursor."""
+        if self._port_move is None:
+            return
+        node = self.get_node(self._port_move["node_id"])
+        if node is None:
+            return
+        vp = node.get_visual_port(self._port_move["vp_id"])
+        if vp is None or vp.get("locked"):
+            return
+        side, offset = node.edge_from_local(node.mapFromScene(scene_pos))
+        vp["side"]   = side
+        vp["offset"] = offset
+        self._port_move["current_side"]   = side
+        self._port_move["current_offset"] = offset
+        node.update()
+        self.update_connections()   # wires follow the new endpoint (incl. fan-out)
+
+    def _finish_port_move(self) -> bool:
+        """Confirm the visual port move at its current edge position."""
+        if self._port_move is None:
+            return False
+        pm = self._port_move
+        node = self.get_node(pm["node_id"])
+        if node is not None:
+            node.set_moving_port(None)
+        self._port_move = None
+        if (pm["current_side"] != pm["original_side"]
+                or pm["current_offset"] != pm["original_offset"]):
+            self._log(
+                f"Visual port moved: [{pm['vp_id']}] -> "
+                f"{pm['current_side']} @ {pm['current_offset']}"
+            )
+        return True
+
+    def _cancel_port_move(self) -> None:
+        """Abort a visual port move, restoring its original side/offset."""
+        if self._port_move is None:
+            return
+        pm = self._port_move
+        node = self.get_node(pm["node_id"])
+        if node is not None:
+            vp = node.get_visual_port(pm["vp_id"])
+            if vp is not None:
+                vp["side"]   = pm["original_side"]
+                vp["offset"] = pm["original_offset"]
+            node.set_moving_port(None)
+            node.update()
+        self._port_move = None
+        self.update_connections()
 
     # ------------------------------------------------------------------ public
 
@@ -1120,6 +1433,12 @@ class Canvas(QGraphicsView):
             self._conn_items.clear()   # scene.clear() in import_parts removes items
             self._connections = []
             self._conn_seq = 0
+            # Reset wire/hover selection that referenced the cleared canvas.
+            self._selected_conn_id = None
+            self._hover_conn_id = None
+            self._hover_vp = None
+            self._hover_drop_node_id = None
+            self._port_move = None
         self.import_parts(data.get("parts", []), part_library, clear=clear)
         max_seq = self._conn_seq
         for conn in data.get("connections", []):
@@ -1214,22 +1533,51 @@ class Canvas(QGraphicsView):
             self.setCursor(Qt.CursorShape.ClosedHandCursor)
             event.accept()
             return
-        # Left press on a visual port starts a port-drag connection.
+        # Left press on a visual port: Alt = move the port, otherwise port-drag connect.
         if event.button() == Qt.MouseButton.LeftButton:
-            hit = self._visual_port_at(self.mapToScene(event.pos()))
+            scene_pos = self.mapToScene(event.pos())
+            hit = self._visual_port_at(scene_pos)
             if hit is not None:
-                self._start_port_drag(hit[0], hit[1])
+                if event.modifiers() & Qt.KeyboardModifier.AltModifier:
+                    self._start_port_move(hit[0], hit[1])   # no-op (logged) if locked
+                else:
+                    self._start_port_drag(hit[0], hit[1])
                 event.accept()
                 return
+            # Design mode: clicking a wire (and not a node) selects it.
+            if self._mode == "design":
+                item = self.itemAt(event.pos())
+                if isinstance(item, PortDot):
+                    item = item.parentItem()
+                if not isinstance(item, PartNode):
+                    conn = self._connection_at(scene_pos)
+                    if conn is not None:
+                        self._set_selected_conn(conn.conn_id())
+                        event.accept()
+                        return
+                # Blank or node click → wire selection is cleared (node selection
+                # is handled by the base class).
+                self._set_selected_conn(None)
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event) -> None:
+        if self._port_move is not None:
+            self._update_port_move(self.mapToScene(event.pos()))
+            event.accept()
+            return
         if self._port_drag is not None:
             self._update_port_drag_preview(self.mapToScene(event.pos()))
+            item = self.itemAt(event.pos())
+            if isinstance(item, PortDot):
+                item = item.parentItem()
+            self._update_drop_target(item.node_id() if isinstance(item, PartNode) else None)
             event.accept()
             return
         if self._mode == "wire":
             self._update_wire_preview(self.mapToScene(event.pos()))
+        # Hover feedback only when no button is held (true mouse hover).
+        if event.buttons() == Qt.MouseButton.NoButton:
+            self._update_hover(self.mapToScene(event.pos()))
         if event.buttons() & Qt.MouseButton.MiddleButton and self._pan_origin is not None:
             total = event.pos() - self._pan_origin
             if not self._panned and total.manhattanLength() > _PAN_THRESHOLD:
@@ -1254,6 +1602,10 @@ class Canvas(QGraphicsView):
             self._pan_last   = None
             event.accept()
             return
+        if self._port_move is not None and event.button() == Qt.MouseButton.LeftButton:
+            self._finish_port_move()
+            event.accept()
+            return
         if self._port_drag is not None and event.button() == Qt.MouseButton.LeftButton:
             item = self.itemAt(event.pos())
             if isinstance(item, PortDot):
@@ -1263,6 +1615,12 @@ class Canvas(QGraphicsView):
             event.accept()
             return
         super().mouseReleaseEvent(event)
+
+    def leaveEvent(self, event) -> None:
+        # Clear hover feedback when the cursor leaves the canvas.
+        self._clear_hover_vp()
+        self._set_hover_conn(None)
+        super().leaveEvent(event)
 
     def dragEnterEvent(self, event) -> None:
         if event.mimeData().hasText():
@@ -1290,6 +1648,10 @@ class Canvas(QGraphicsView):
         event.acceptProposedAction()
 
     def contextMenuEvent(self, event):
+        # Right-click during a visual port move cancels it (restores position, no menu).
+        if self._port_move is not None:
+            self._cancel_port_move()
+            return
         # Right-click during a port drag cancels it (no menu).
         if self._port_drag is not None:
             self._cancel_port_drag()
@@ -1355,6 +1717,16 @@ class Canvas(QGraphicsView):
 
         # Design mode
         if not isinstance(item, PartNode):
+            # Right-click near a wire: select it and offer Delete Wire.
+            conn = self._connection_at(scene_pos)
+            if conn is not None:
+                self._set_selected_conn(conn.conn_id())
+                menu = QMenu(self)
+                a_del = menu.addAction("Delete Wire")
+                chosen = menu.exec(event.globalPos())
+                if chosen is a_del:
+                    self._remove_connection(conn.conn_id())
+                return
             super().contextMenuEvent(event)
             return
 
@@ -1411,7 +1783,15 @@ class Canvas(QGraphicsView):
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Delete:
-            self.delete_selected()
+            # A selected wire takes priority over node deletion (but never during
+            # an in-progress port drag, which owns its own cancel/finish flow).
+            if self._selected_conn_id is not None and self._port_drag is None:
+                self._remove_connection(self._selected_conn_id)
+            else:
+                self.delete_selected()
+        elif event.key() == Qt.Key.Key_Escape and self._port_move is not None:
+            # Cancel an in-progress visual port move (PATCH_VISUAL_PORT_MOVE_V05).
+            self._cancel_port_move()
         elif event.key() == Qt.Key.Key_Escape and self._port_drag is not None:
             # Cancel an in-progress port drag (PATCH_PORT_DRAG_CONNECT_V05).
             self._cancel_port_drag()
@@ -1449,6 +1829,12 @@ class Canvas(QGraphicsView):
             else:
                 kept.append(conn)
         self._connections = kept
+
+        # Drop selection/hover that pointed at a now-removed connection.
+        if self._selected_conn_id not in self._conn_items:
+            self._selected_conn_id = None
+        if self._hover_conn_id not in self._conn_items:
+            self._hover_conn_id = None
 
         # Remove the node itself.
         node = self.get_node(node_id)

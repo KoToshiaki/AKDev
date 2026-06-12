@@ -237,6 +237,55 @@ PowerPoint のように、目的別にタブを分ける。
 
 ---
 
+## v0.5 PATCH_WIRE_HOVER_FEEDBACK_V05（Hover Feedback）
+
+> Wiring / Port Drag Connect の操作対象を hover で視認できるようにする（視覚のみ）。
+> 設計書: `PATCH_WIRE_HOVER_FEEDBACK_V05_ROADMAP.md` ／ 進捗: `PATCH_WIRE_HOVER_FEEDBACK_V05_CHECKLIST.md`。
+> 仕様: `UI_SPEC_V05.md` 11-J（Hover Feedback）。
+
+| 項目 | 概要 |
+|---|---|
+| visual port hover | port に近づくと明るく + 白枠 + 拡大。`PartNode.set_hover_port` |
+| wire hover | wire に近づくと太く + 明るく。`ConnectionLine.set_hovered`（active 優先）|
+| drop highlight | port-drag 中、カーソル下の別ノードをアクセント色外枠で候補表示（同一ノード除外）|
+| 解除 | leaveEvent / port-drag 終了・キャンセルで確実に解除 |
+| 範囲外 | wire 選択・Delete Wire・vp 対話移動・接続可否の型判定はやらない |
+
+---
+
+## v0.5 PATCH_WIRE_SELECT_DELETE_V05（Wire Select & Delete）
+
+> 作成済みの wire を選択・削除できるようにする。
+> 設計書: `PATCH_WIRE_SELECT_DELETE_V05_ROADMAP.md` ／ 進捗: `PATCH_WIRE_SELECT_DELETE_V05_CHECKLIST.md`。
+> 仕様: `UI_SPEC_V05.md` 11-J（Wire Select & Delete）。
+
+| 項目 | 概要 |
+|---|---|
+| wire 選択 | 左クリックで選択（`Canvas._selected_conn_id`）。`ConnectionLine.set_selected/is_selected`。表示優先度 selected > active > hover > normal |
+| 削除 API | `Canvas._remove_connection(conn_id)` に集約。共有 fan-out vp は残し orphan のみ prune |
+| Delete キー | 選択 wire があれば wire 削除、なければ従来のノード削除 |
+| 右クリック | wire 近くで「Delete Wire」メニュー。PartNode 上 / port-drag / wire mode は従来どおり |
+| 範囲外 | Properties / 色変更 / ラベル / 複数選択 / Undo / z-order 調整はやらない |
+
+---
+
+## v0.5 PATCH_VISUAL_PORT_MOVE_V05（Visual Port Move）
+
+> visual port を Alt + 左ドラッグで PartNode の辺上に移動できるようにする。
+> 設計書: `PATCH_VISUAL_PORT_MOVE_V05_ROADMAP.md` ／ 進捗: `PATCH_VISUAL_PORT_MOVE_V05_CHECKLIST.md`。
+> 仕様: `UI_SPEC_V05.md` 11-J（Visual Port Move）。
+
+| 項目 | 概要 |
+|---|---|
+| Alt + 左ドラッグ | visual port 移動を開始（Alt なしは従来の port-drag connect）。`Canvas._port_move` |
+| 辺拘束 | `PartNode.edge_from_local()` で最近辺 side + clamp 済み offset。scene 絶対座標は持たない |
+| wire 追従 | `_update_port_move` で side/offset 更新 + `update_connections()`。fan-out 共有 vp も全 wire 追従 |
+| 確定 / 取消 | release で確定、Esc / 右クリックで元の side/offset へ復元 |
+| locked | locked vp は移動しない（ログ 1 行）|
+| 範囲外 | 通常左ドラッグ移動 / 複数選択 / 削除 UI / rename / サイズ変更 / Undo はやらない |
+
+---
+
 ## v0.5 でやらないこと
 
 | 項目 | 理由 |
