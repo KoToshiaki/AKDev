@@ -883,6 +883,55 @@ CPU パーツに `tests/test/hello_world.asm` を割り当て → Run タブ `Wr
 
 ---
 
+## 11-M. Virtual CPU Step & Trace（PATCH_VIRTUAL_CPU_STEP_TRACE_V05）
+
+> AKDev 内の仮想 CPU 実行環境を明確化し、1 命令ずつ Step 実行して詳細 trace を確認できるようにする。
+> 設計書: `PATCH_VIRTUAL_CPU_STEP_TRACE_V05_ROADMAP.md` ／ 進捗: `..._CHECKLIST.md`。
+
+### 実行モデル（誤解防止）
+
+- **物理的には PC 上の Python プログラムとして動く。**
+- ただし AKDev 内に**仮想 CPU・仮想 RAM・仮想 UART**の状態を持ち、命令を 1 つずつ
+  fetch / decode / execute している構造である。
+- **Step は 1 命令実行**、**Run は Step の繰り返し**。
+
+### Virtual Runtime（`core/runtime.py`）
+
+`VirtualCircuitRuntime` が既存 bus/ram/uart/cpu を**包む**（新規デバイスは作らない）。
+状態: cpu/ram/uart/bus/loaded/loaded_program/step_count/last_trace/trace_history。
+API: `load_program` / `reset` / `step` / `run` / `registers` / `memory_snapshot` / `uart_text`。
+
+### Step trace（dict）
+
+`step()` は 1 命令分の trace を返す。記録するもの:
+
+| キー | 内容 |
+|---|---|
+| step / pc_before / pc_after | ステップ番号と PC の前後 |
+| instruction / raw | 最小 disassembler の命令文字列 + raw word |
+| register_changes | 変化したレジスタのみ `{"r1": ["0x..","0x.."]}` |
+| memory | RAM read/write（命令 fetch は除外）|
+| io | UART OUT など `{type,addr,value,device}` |
+| uart | このステップで出た文字 |
+| halted / error | 停止状態・エラー |
+
+メモリ/IO は **Bus の後方互換フック `on_access`**（既定 None）で構造取得する。
+
+### Step ボタン / Run / 表示
+
+- 未ロード → `No program loaded. Use Write Program first.`、halted 後 → `CPU is halted`。
+- Step は Log に `[STEP nnnn] PC .. -> .. | <instr>` + REG/MEM/IO/UART の詳細を出す。
+- Run は要約のみ（`Run finished: steps=.., halted=.., uart=".."`）。詳細は trace_history に保持。
+- Step/Run/Reset 後に Register View / Memory Viewer / Bus Trace / UART Console / signal overlay を更新。
+
+### 今回やらないこと / 次に進む先
+
+- Build Graph 本実装・未接続実行禁止・ROM・FPGA・disassembler 本格実装・breakpoints はやらない。
+- 次パッチ候補: `PATCH_CIRCUIT_CONNECTIVITY_REQUIRED_V05` / `PATCH_CPU_RAM_VALIDATION_V05` /
+  `PATCH_BUILD_GRAPH_PROTOTYPE_V05`。
+
+---
+
 ## 12. ユーザー UI ラフ反映欄
 
 > **このセクションはユーザーが UI ラフを作成した後に更新する。**

@@ -15,6 +15,7 @@ from asm.asm import AsmError, assemble_ex
 from core.cpu import AK32Part
 from core.dev import RamPart, UartPart
 from core.project import create_project, load_project, load_target, save_system
+from core.runtime import VirtualCircuitRuntime
 from core.sim import Bus
 from ui.canvas import Canvas
 from ui.editor import EditorTabs, validate_source_name
@@ -140,6 +141,12 @@ class MainWin(QMainWindow):
         self._sim_bus.attach(self._sim_ram,  _SIM_RAM_BASE,  _SIM_RAM_SIZE)
         self._sim_bus.attach(self._sim_uart, _SIM_UART_BASE, _SIM_UART_SIZE)
         self._sim_bus.tracing = True      # enable bus tracing
+        # Virtual circuit runtime — wraps the devices for stepped, traced execution
+        # (PATCH_VIRTUAL_CPU_STEP_TRACE_V05). Physically this is host Python, but it
+        # models AKDev's virtual CPU/RAM/UART advanced one instruction at a time.
+        self._runtime = VirtualCircuitRuntime(
+            self._sim_bus, self._sim_ram, self._sim_uart, self._sim_cpu
+        )
 
     # ------------------------------------------------------------------ helpers
 
@@ -637,15 +644,12 @@ class MainWin(QMainWindow):
         self._log.append(
             f"Build succeeded: {out_path.as_posix()}  ({len(binary)} bytes)"
         )
-        # Load binary into simulator RAM and reset the CPU.
-        self._sim_ram.reset()
-        self._sim_ram.load_bytes(binary)
-        self._sim_uart.reset()
-        self._sim_cpu.reset()
+        # Load binary into the virtual circuit (RAM/CPU/UART) via the runtime.
+        # This also marks the runtime as loaded so Step/Run can gate on it
+        # (PATCH_VIRTUAL_CPU_STEP_TRACE_V05).
+        self._runtime.load_program(binary, source_name=source_name)
         self._sim_cycle = 0
         self._pause_requested = False
-        self._sim_bus.clear_trace()
-        self._sim_bus.reset_transactions()
         self._log.append(f"Loaded binary to RAM: {len(binary)} bytes")
         self._console.clear()
         self._console.appendPlainText(f"[build] loaded {len(binary)} bytes — ready")
@@ -695,6 +699,10 @@ class MainWin(QMainWindow):
             "target_node_id": node_id,
             "status":         "loaded",
         }
+        # Record the target node on the runtime's loaded_program too (set by
+        # load_program with target_node_id=None during _assemble_and_load).
+        if self._runtime.loaded_program is not None:
+            self._runtime.loaded_program["target_node_id"] = node_id
         self._log.append(f"Program written to circuit: {node_id} <- {rel}")
         self._refresh_node_properties(node_id)
         return True
@@ -743,12 +751,50 @@ class MainWin(QMainWindow):
         """Refresh canvas signal overlay from the most recent bus transactions."""
         self._canvas.update_signal_overlay(self._sim_bus.last_transactions)
 
+    def _has_program(self) -> bool:
+        """True if a program has been loaded into the virtual circuit.
+
+        Accepts both the runtime loader and the legacy direct-RAM-load path
+        (used by some tests): a non-zero RAM image counts as loaded.
+        """
+        return self._runtime.loaded or any(self._sim_ram.dump())
+
+    def _refresh_run_panels(self) -> None:
+        """Update every execution-related panel after a Step/Run/Reset."""
+        self._update_uart_console()
+        self._update_register_view()
+        self._update_bus_trace()
+        self._update_memory_viewer()
+        self._update_pc_highlight()
+        self._update_signal_overlay()
+
+    def _log_step_trace(self, trace: dict) -> None:
+        """Emit a detailed one-instruction trace to the Log (UI trace 導線)."""
+        self._log.append(
+            f"[STEP {trace['step']:04d}] "
+            f"PC 0x{trace['pc_before']:04x} -> 0x{trace['pc_after']:04x} "
+            f"| {trace['instruction']}"
+        )
+        for name, (before, after) in trace["register_changes"].items():
+            self._log.append(f"  REG {name}: {before} -> {after}")
+        for m in trace["memory"]:
+            arrow = "<-" if m["type"] == "write" else "->"
+            verb  = "WRITE" if m["type"] == "write" else "READ"
+            self._log.append(f"  MEM {verb} {m['addr']} {arrow} {m['value']}")
+        for io in trace["io"]:
+            arrow = "<-" if io["type"] == "write" else "->"
+            verb  = "WRITE" if io["type"] == "write" else "READ"
+            self._log.append(
+                f"  IO {verb} {io['addr']} {arrow} {io['value']} ({io['device']})"
+            )
+        if trace["uart"]:
+            self._log.append(f"  UART {trace['uart']!r}")
+        if trace["error"]:
+            self._log.append(f"  ERROR {trace['error']}")
+
     def _do_reset(self):
         """Reset CPU and UART (RAM keeps the loaded binary)."""
-        self._sim_cpu.reset()
-        self._sim_uart.reset()
-        self._sim_bus.clear_trace()
-        self._sim_bus.reset_transactions()
+        self._runtime.reset()
         self._sim_cycle = 0
         self._pause_requested = False
         self._log.append(
@@ -763,87 +809,63 @@ class MainWin(QMainWindow):
         self._canvas.clear_signal_overlay()
 
     def _do_step(self):
-        """Execute one CPU instruction."""
-        if self._sim_cpu.halted():
-            self._log.append("Step: CPU is halted — Reset to restart")
+        """Execute one instruction on the virtual CPU and trace it."""
+        if not self._has_program():
+            self._log.append("No program loaded. Use Write Program first.")
             return
-        uart_before = self._sim_uart.output_text()
-        self._sim_cpu.tick()
-        self._sim_cycle += 1
-        uart_after = self._sim_uart.output_text()
-        self._log.append(
-            f"Step [{self._sim_cycle}]: pc={self._sim_cpu.pc():#06x}"
-            f"  halted={self._sim_cpu.halted()}"
-        )
-        if uart_after != uart_before:
-            new_chars = uart_after[len(uart_before):]
-            self._log.append(f"  UART: {new_chars!r}")
-            self._console.insertPlainText(new_chars)
-        self._update_uart_console()
-        self._update_register_view()
-        self._update_bus_trace()
-        self._update_memory_viewer()
-        self._update_pc_highlight()
-        self._update_signal_overlay()
+        if self._sim_cpu.halted():
+            self._log.append("CPU is halted")
+            return
+        trace = self._runtime.step()
+        self._sim_cycle = self._runtime.step_count
+        self._log_step_trace(trace)
+        if trace["uart"]:
+            self._console.insertPlainText(trace["uart"])
+        self._refresh_run_panels()
 
     def _do_run(self):
-        """Run up to 1000 steps or until halted."""
+        """Run = repeated Step, up to 1000 instructions or until halted."""
+        if not self._has_program():
+            self._log.append("No program loaded. Use Write Program first.")
+            return
         if self._sim_cpu.halted():
             self._log.append("Run: CPU is halted — Reset to restart")
             return
         self._pause_requested = False
         self._log.append("Run started")
         self._console.appendPlainText("[run] started\n")
-        uart_before = self._sim_uart.output_text()
+        traces: list[dict] = []
+        halted = False
         for _ in range(1000):
             if self._pause_requested:
+                self._sim_cycle = self._runtime.step_count
                 self._log.append(
                     f"Run paused at cycle {self._sim_cycle}"
                     f"  pc={self._sim_cpu.pc():#06x}"
                 )
-                self._update_uart_console()
-                self._update_register_view()
-                self._update_bus_trace()
-                self._update_memory_viewer()
-                self._update_pc_highlight()
-                self._update_signal_overlay()
+                self._refresh_run_panels()
                 return
-            self._sim_cpu.tick()
-            self._sim_cycle += 1
-            if self._sim_cpu.halted():
-                uart_after = self._sim_uart.output_text()
-                if uart_after != uart_before:
-                    self._log.append(f"  UART: {uart_after!r}")
-                    self._console.insertPlainText(uart_after[len(uart_before):])
-                self._log.append(
-                    f"HALTED at cycle {self._sim_cycle}"
-                    f"  pc={self._sim_cpu.pc():#06x}"
-                )
-                self._log.append("Run stopped (HALTED)")
-                self._console.appendPlainText(
-                    f"\n[run] HALTED at cycle {self._sim_cycle}"
-                )
-                self._update_uart_console()
-                self._update_register_view()
-                self._update_bus_trace()
-                self._update_memory_viewer()
-                self._update_pc_highlight()
-                self._update_signal_overlay()
-                return
+            trace = self._runtime.step()
+            traces.append(trace)
+            if trace["uart"]:
+                self._console.insertPlainText(trace["uart"])
+            if trace["halted"]:
+                halted = True
+                break
+        self._sim_cycle = self._runtime.step_count
         uart_after = self._sim_uart.output_text()
-        if uart_after != uart_before:
-            self._log.append(f"  UART: {uart_after!r}")
-            self._console.insertPlainText(uart_after[len(uart_before):])
+        # Summary only (detailed per-step traces are kept in runtime.trace_history).
         self._log.append(
-            f"Run stopped (1000 cycle limit)  pc={self._sim_cpu.pc():#06x}"
+            f'Run finished: steps={len(traces)}, halted={halted}, uart="{uart_after}"'
         )
-        self._console.appendPlainText("\n[run] stopped (1000 cycle limit)")
-        self._update_uart_console()
-        self._update_register_view()
-        self._update_bus_trace()
-        self._update_memory_viewer()
-        self._update_pc_highlight()
-        self._update_signal_overlay()
+        if halted:
+            self._console.appendPlainText(f"\n[run] HALTED at cycle {self._sim_cycle}")
+        else:
+            self._log.append(
+                f"Run stopped (1000 cycle limit)  pc={self._sim_cpu.pc():#06x}"
+            )
+            self._console.appendPlainText("\n[run] stopped (1000 cycle limit)")
+        self._refresh_run_panels()
 
     def _do_pause(self):
         """Request pause of the running simulation."""

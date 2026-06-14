@@ -1,6 +1,86 @@
 # AKDev 引き継ぎメモ
 
-更新日: 2026-06-13（PATCH_CIRCUIT_WRITE_RUN_HELLO_V05 — Write Program to Circuit）
+更新日: 2026-06-13（PATCH_VIRTUAL_CPU_STEP_TRACE_V05 — Virtual CPU Step & Trace）
+
+---
+
+## 現在の状況（PATCH_VIRTUAL_CPU_STEP_TRACE_V05 — Virtual CPU Step & Trace）
+
+**フェーズ: v0.5（進行中・PHASE COMPLETE ではない）。仮想 CPU 実行環境を Virtual Runtime に寄せ、
+1 命令ずつ Step 実行して詳細 trace を確認できるようにした。**
+
+> **物理的には PC 上の Python プログラムとして動く。**
+> ただし AKDev 内に**仮想 CPU・仮想 RAM・仮想 UART**の状態を持ち、命令を 1 つずつ
+> fetch / decode / execute している構造にした。**Step は 1 命令実行、Run は Step の繰り返し。**
+
+### 完了した作業
+
+| 項目 | 内容 |
+|---|---|
+| Virtual Runtime | `core/runtime.py`（新規）`VirtualCircuitRuntime` が既存 bus/ram/uart/cpu を**包む**（新規デバイス不要）。状態: loaded / loaded_program / step_count / last_trace / trace_history。API: load_program / reset / step / run / registers / memory_snapshot / uart_text |
+| Step trace | `step()` が 1 命令の trace dict を返す（step / pc_before / pc_after / instruction / raw / register_changes / memory / io / uart / halted / error）|
+| 最小 disassembler | `core/runtime.py` `disasm()` が 11 命令を ASM 風文字列に復元（本格版ではない・将来拡張）|
+| Bus フック | `core/sim.py` `Bus.on_access`（既定 None・後方互換）を追加。read/write で `on_access(op,addr,value,part_id)` を呼ぶ。memory/IO を構造取得 |
+| Step ボタン | `_do_step` を runtime.step() 経由へ。未ロード `No program loaded. Use Write Program first.` / halted `CPU is halted` / Log に `[STEP nnnn] PC .. -> .. \| <instr>` + REG/MEM/IO/UART |
+| Run | `_do_run` を runtime.step() の繰り返しへ。要約ログ `Run finished: steps=.., halted=.., uart=".."`。詳細は trace_history。`Hello World !` は従来どおり UART Console に出る |
+| Reset | `_do_reset` を runtime.reset() 経由へ（trace_history もクリア）|
+| ロード共通化 | `_assemble_and_load` の RAM/CPU/UART リセット+ロードを `runtime.load_program()` へ集約。Build/Write 両経路で runtime.loaded が立つ |
+| プログラム判定 | `_has_program()` = `runtime.loaded or RAM 非ゼロ`。RAM 直接ロードの既存テストも通す |
+| 互換 | 既存 Build/Run・hello.asm "Hi"・Circuit Write/Run Hello・Program/Sources・Step pc 前進・Reg View・Bus Trace は不変 |
+
+### 作成したパッチ文書
+
+- `PATCH_VIRTUAL_CPU_STEP_TRACE_V05_ROADMAP.md` / `..._CHECKLIST.md`
+
+### Step trace のデータ構造（例）
+
+```python
+{ "step": 3, "pc_before": 0x0008, "pc_after": 0x000C,
+  "instruction": "OUT [r2], r1", "raw": 0x03020100,
+  "register_changes": {}, "memory": [],
+  "io": [{"type":"write","addr":"0x0100","value":"0x48","device":"UART"}],
+  "uart": "H", "halted": False, "error": None }
+```
+
+### Hello World を Step 実行した例
+
+```text
+[STEP 0001] PC 0x0000 -> 0x0004 | LDI r2, 0x100
+  REG r2: 0x00000000 -> 0x00000100
+[STEP 0002] PC 0x0004 -> 0x0008 | LDI r1, 0x48
+  REG r1: 0x00000000 -> 0x00000048
+[STEP 0003] PC 0x0008 -> 0x000c | OUT [r2], r1
+  IO WRITE 0x0100 <- 0x48 (UART)
+  UART 'H'
+```
+
+### テスト結果
+
+- `pytest tests/` **762 件全通過**（PATCH_CIRCUIT_WRITE_RUN_HELLO_V05 完了時 741 → +21）
+- 新規 `tests/test_virtual_cpu_step_trace_v05.py`（21 件）
+- 既存 741 件は無改変で通過（Build/Run・hello.asm "Hi"・Circuit Write/Run Hello・Program/Sources・Step/Reg/Bus）
+
+### まだ残っている問題（将来）
+
+- Build Graph 本実装 / Canvas 配線からの CPU・RAM・UART 自動解決は未実装。
+- 未接続パーツでの実行禁止 / CPU・RAM 妥当性チェックは未実装。
+- disassembler は最小実装（本格版・ラベル復元は将来）。breakpoints / source-level debug は未実装。
+- GUI 目視確認はヘッドレス環境のため未実施（下記「UI 確認点」参照）。
+
+### UI 上でユーザーが確認すべき点
+
+1. `Write Program` 後に Run タブの `Step` を押すと Log に `[STEP 0001] PC 0x0000 -> 0x0004 | LDI r2, 0x100` が出るか。
+2. もう数回 Step を押すと OUT 命令で `IO WRITE 0x0100 <- 0x48 (UART)` / `UART 'H'` が出て、UART Console に 1 文字ずつ増えるか。
+3. Step ごとに Register View（PC / cycle）と Memory Viewer が更新されるか。
+4. `Run` を押すと UART Console に `Hello World !` が出て、Log に `Run finished: steps=.., halted=True, uart=".."` が出るか。
+5. 未ロードで `Step`/`Run` を押すと `No program loaded. Use Write Program first.` が出るか。
+6. HALT 後に `Step` を押すと `CPU is halted` が出て PC が進まないか。
+7. 従来の `Build → Run`（エディタタブ）と hello.asm の "Hi" が維持されているか。
+
+### 次に行うべき作業
+
+- ユーザー判断: `PATCH_CIRCUIT_CONNECTIVITY_REQUIRED_V05`（配線から実行構成を解決・未接続実行禁止）／
+  `PATCH_CPU_RAM_VALIDATION_V05`（CPU/RAM 妥当性チェック）／`PATCH_BUILD_GRAPH_PROTOTYPE_V05`（Build Graph 試作）のいずれへ進むか
 
 ---
 

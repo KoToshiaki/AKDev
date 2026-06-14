@@ -13,7 +13,8 @@
 > `PATCH_VISUAL_PORT_MOVE_V05_CHECKLIST.md`（Visual Port Move）/
 > `PATCH_WIRE_STYLE_V05_CHECKLIST.md`（Wire Style）/
 > `PATCH_PART_PROGRAM_ASSIGN_V05_CHECKLIST.md`（Program / Sources 割り当て）/
-> `PATCH_CIRCUIT_WRITE_RUN_HELLO_V05_CHECKLIST.md`（Write Program to Circuit）。
+> `PATCH_CIRCUIT_WRITE_RUN_HELLO_V05_CHECKLIST.md`（Write Program to Circuit）/
+> `PATCH_VIRTUAL_CPU_STEP_TRACE_V05_CHECKLIST.md`（Virtual CPU Step & Trace）。
 
 ---
 

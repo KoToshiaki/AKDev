@@ -76,6 +76,10 @@ class Bus:
         self._map:   list[tuple[int, int, Part]] = []
         self._trace: list[str]                   = []
         self._cycle_fn = cycle_fn  # optional callable -> int
+        # Optional structured access hook (PATCH_VIRTUAL_CPU_STEP_TRACE_V05).
+        # When set, called as on_access(op, addr, value, part_id) on every
+        # read/write.  Default None keeps existing behaviour unchanged.
+        self.on_access = None
 
     # ---- registration ----
 
@@ -107,6 +111,8 @@ class Bus:
         self.last_transactions[part.id] = ("READ", addr, value)
         if self.tracing:
             self._trace.append(self._fmt("READ ", addr, value, part.id))
+        if self.on_access is not None:
+            self.on_access("READ", addr, value, part.id)
         return value
 
     def write(self, addr: int, value: int) -> None:
@@ -115,6 +121,8 @@ class Bus:
         self.last_transactions[part.id] = ("WRITE", addr, value)
         if self.tracing:
             self._trace.append(self._fmt("WRITE", addr, value, part.id))
+        if self.on_access is not None:
+            self.on_access("WRITE", addr, value, part.id)
 
     # ---- trace helpers ----
 

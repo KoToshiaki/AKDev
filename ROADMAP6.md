@@ -340,6 +340,26 @@ PowerPoint のように、目的別にタブを分ける。
 
 ---
 
+## v0.5 PATCH_VIRTUAL_CPU_STEP_TRACE_V05（Virtual CPU Step & Trace）
+
+> AKDev 内の仮想 CPU 実行環境を明確化し、1 命令ずつ Step 実行して PC・命令・レジスタ変化・
+> メモリ/IO・UART 出力を Log/Trace で確認できるようにする。
+> **物理的には PC 上の Python だが、AKDev 内の仮想 CPU/RAM/UART を命令単位で動かす構造。**
+> 設計書: `PATCH_VIRTUAL_CPU_STEP_TRACE_V05_ROADMAP.md` ／ 進捗: `..._CHECKLIST.md`。
+> 仕様: `UI_SPEC_V05.md` 11-M。
+
+| 項目 | 概要 |
+|---|---|
+| Virtual Runtime | `core/runtime.py` `VirtualCircuitRuntime` が既存 bus/ram/uart/cpu を包む（新規デバイス不要）|
+| Step trace | `step()` が 1 命令の trace dict（pc 前後 / 命令 / レジスタ変化 / memory / io / uart / halted）を返す |
+| Bus フック | `core/sim.py` `Bus.on_access`（既定 None・後方互換）で memory/IO を構造取得 |
+| Step ボタン | 1 押下 = 1 命令。未ロード/halted を分かりやすくログ。Log に詳細 trace |
+| Run | `runtime.step()` の繰り返し。要約ログ + 詳細は trace_history |
+| 互換 | 既存 Build/Run・hello.asm "Hi"・Circuit Write/Run Hello・Program/Sources は不変 |
+| 次候補 | `PATCH_CIRCUIT_CONNECTIVITY_REQUIRED_V05` / `PATCH_CPU_RAM_VALIDATION_V05` / `PATCH_BUILD_GRAPH_PROTOTYPE_V05` |
+
+---
+
 ## v0.5 でやらないこと
 
 | 項目 | 理由 |

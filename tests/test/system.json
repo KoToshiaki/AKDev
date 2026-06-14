@@ -5,8 +5,8 @@
       "node_id": "node_0003",
       "part_id": "mem.ram",
       "name": "RAM",
-      "x": -165.0,
-      "y": 39.0,
+      "x": -81.0,
+      "y": -116.0,
       "sources": {
         "asm": null,
         "hdl": null
@@ -16,8 +16,8 @@
       "node_id": "node_0002",
       "part_id": "cpu.ak32",
       "name": "AK32 CPU",
-      "x": -436.0,
-      "y": 46.0,
+      "x": -366.0,
+      "y": -65.0,
       "sources": {
         "asm": "hello_world.asm",
         "hdl": null
