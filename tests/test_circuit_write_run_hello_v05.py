@@ -17,7 +17,9 @@ from ui.prop import PropPanel
 from ui.win import MainWin
 from core.project import create_project
 
-_CPU = {"id": "cpu.ak32", "name": "AK32", "category": "cpu"}
+_CPU  = {"id": "cpu.ak32", "name": "AK32", "category": "cpu"}
+_RAM  = {"id": "mem.ram",  "name": "RAM",  "category": "mem"}
+_UART = {"id": "io.uart",  "name": "UART", "category": "io"}
 _HELLO_WORLD = Path(__file__).parent / "test" / "hello_world.asm"
 _HELLO = Path(__file__).parent.parent / "src" / "hello.asm"
 _REL = "tests/test/hello_world.asm"
@@ -52,8 +54,16 @@ def _win(tmp_path):
 
 
 def _assign_hello_world(win, root):
-    """Copy hello_world.asm into the project and assign it to a CPU node."""
-    win._canvas.add_part_at(_CPU, QPointF(0.0, 0.0))
+    """Build a full CPU+RAM+UART circuit and assign hello_world.asm to the CPU.
+
+    PATCH_VIRTUAL_CIRCUIT_RUNTIME_V05: execution now requires a wired circuit, so
+    the test places + connects CPU↔RAM and CPU↔UART before Write Program.
+    """
+    win._canvas.add_part_at(_CPU,  QPointF(0.0, 0.0))     # node_0001 (CPU)
+    win._canvas.add_part_at(_RAM,  QPointF(200.0, 0.0))   # node_0002 (RAM)
+    win._canvas.add_part_at(_UART, QPointF(400.0, 0.0))   # node_0003 (UART)
+    win._canvas.add_connection("node_0001", "bus", "node_0002", "bus")
+    win._canvas.add_connection("node_0001", "bus", "node_0003", "bus")
     dst = root / "tests" / "test"
     dst.mkdir(parents=True, exist_ok=True)
     (dst / "hello_world.asm").write_text(
@@ -97,19 +107,36 @@ def test_write_program_log_message(tmp_path):
     assert _REL in log
 
 
+def _wire_only(win):
+    """Place + wire CPU+RAM+UART without assigning a program (circuit is valid)."""
+    win._canvas.add_part_at(_CPU,  QPointF(0.0, 0.0))
+    win._canvas.add_part_at(_RAM,  QPointF(200.0, 0.0))
+    win._canvas.add_part_at(_UART, QPointF(400.0, 0.0))
+    win._canvas.add_connection("node_0001", "bus", "node_0002", "bus")
+    win._canvas.add_connection("node_0001", "bus", "node_0003", "bus")
+
+
 def test_write_program_no_source(tmp_path):
     win, root = _win(tmp_path)
-    win._canvas.add_part_at(_CPU, QPointF(0.0, 0.0))   # no source assigned
+    _wire_only(win)                                    # wired, but no source assigned
     assert win.write_program() is False
     assert "No ASM source assigned" in win._log.toPlainText()
 
 
 def test_write_program_missing_path(tmp_path):
     win, root = _win(tmp_path)
-    win._canvas.add_part_at(_CPU, QPointF(0.0, 0.0))
+    _wire_only(win)
     win._canvas.set_node_source("node_0001", "asm", "tests/test/nope.asm")
     assert win.write_program() is False
     assert "Program source not found" in win._log.toPlainText()
+
+
+def test_write_program_blocked_when_unconnected(tmp_path):
+    """Circuit-mode: a lone CPU (no RAM/UART wired) blocks Write Program."""
+    win, root = _win(tmp_path)
+    win._canvas.add_part_at(_CPU, QPointF(0.0, 0.0))   # no RAM/UART/wires
+    assert win.write_program() is False
+    assert "blocked" in win._log.toPlainText()
 
 
 def test_properties_show_loaded_state(tmp_path):

@@ -1,6 +1,72 @@
 # AKDev 引き継ぎメモ
 
-更新日: 2026-06-13（PATCH_VIRTUAL_CPU_STEP_TRACE_V05 — Virtual CPU Step & Trace）
+更新日: 2026-06-15（PATCH_VIRTUAL_CIRCUIT_RUNTIME_V05 — Virtual Circuit Runtime）
+
+---
+
+## 現在の状況（PATCH_VIRTUAL_CIRCUIT_RUNTIME_V05 — Virtual Circuit Runtime）
+
+**フェーズ: v0.5（進行中・PHASE COMPLETE ではない）。固定内部回路で Hello World を出す構造から、
+Canvas 由来の CircuitPlan をもとに VirtualCircuitRuntime を生成する構造へ移行した。**
+
+### 背景（解消した設計ズレ）
+
+これまで実行は**固定の内部 `_sim_cpu/_sim_ram/_sim_uart`**を使い、Canvas のトポロジ（どのパーツが
+どう繋がっているか）を一切見ていなかった。未接続の CPU/RAM でも Run できてしまう状態。本パッチで
+**Canvas の接続から実行構成を解決し、未接続なら実行をブロック**するようにした。最小ゴール構成は
+**CPU + RAM + UART**。
+
+### 完了した作業
+
+| 項目 | 内容 |
+|---|---|
+| CircuitPlan | `core/circuit.py` `resolve_circuit(nodes, connections)`。CPU(cat=cpu)/RAM(cat=mem)/UART(cat=io&uart) を検出し CPU–RAM・CPU–UART の wire 接続を解析。`{ok,issues,cpu,rams,uarts,cpu_present}` を返す |
+| runtime factory | `win.py:_make_sim(plan)`（startup と Write/Build 時の再生成で共用）。`_bind_circuit_runtime(plan)` で接続構成に runtime をバインド |
+| circuit/legacy mode | `_resolve_circuit_plan()` / `_circuit_guard(action)`。CPU 配置あり=circuit mode（未接続は Write/Build/Run/Step をブロック）、CPU 無し=legacy mode（従来の固定 runtime 維持）|
+| Write/Build | circuit mode で guard → runtime 再生成 → **接続 RAM** へロード。asm は接続 CPU の `sources.asm` を優先解決 |
+| Run/Step | guard のみ（未接続でブロック、runtime は再生成せずロード済みを保持）。接続 CPU を実行し OUT は接続 UART へ |
+| テスト更新 | 孤立 CPU で write/run していた 3 ファイルを CPU+RAM+UART 配置・配線へ更新 |
+
+### 作成・変更したファイル
+
+- 新規: `core/circuit.py`、`tests/test_virtual_circuit_runtime_v05.py`、`PATCH_VIRTUAL_CIRCUIT_RUNTIME_V05_ROADMAP.md`/`_CHECKLIST.md`
+- 変更: `ui/win.py`（`_make_sim`/`_resolve_circuit_plan`/`_circuit_guard`/`_bind_circuit_runtime`、`write_program`/`_build`/`_do_run`/`_do_step` に gate）
+- 既存テスト更新: `tests/test_virtual_cpu_step_trace_v05.py` / `tests/test_circuit_write_run_hello_v05.py` / `tests/test_part_program_assign_v05.py`（正しい回路構成へ）
+- ドキュメント: `UI_SPEC_V05.md`(11-N) / `ROADMAP6.md` / `CHECKLIST6.md`
+
+### テスト結果
+
+- `pytest tests/` **779 件全通過**（PATCH_VIRTUAL_CPU_STEP_TRACE_V05 完了時 762 → +17）
+- 新規 `tests/test_virtual_circuit_runtime_v05.py`（16 件）+ 既存に未接続ブロックテスト 1 件追加
+- headless 検証: resolve（接続/未接続/CPU不在/複数CPU/RAM不在）✅ / 正しい回路で write→run → `Hello World !` ✅ / Write が接続 RAM へロード ✅ / 孤立 CPU で write/run/step ブロック ✅ / UART 未接続ブロック ✅ / legacy（CPU無し）Build→Run・RAM直ロード Run ✅ / hello.asm "Hi" 維持 ✅
+
+### 互換性メモ
+
+- **legacy mode（CPU 未配置）は従来動作を完全維持**。`test_v01_flow` / `test_target_build_config` /
+  `test_gui_sim_run` / signal overlay の MainWin no-crash 等は Canvas に CPU を置かない＝不変。
+- `_make_sim` の runtime 再生成は Write/Build 時のみ（直後にロード）。Run/Step では再生成しない。
+- `core/runtime.py` の `VirtualCircuitRuntime` API は不変（`plan` 属性のみ付与）。
+
+### まだ残っている問題（将来）
+
+- アドレスマップは当面デフォルト固定（RAM 0x0000 / UART 0x0100）。アドレスマップエディタ未実装。
+- 複数デバイス（複数 RAM/UART）・複数 CPU の本対応は未実装（複数 CPU は現状 issue 扱い）。
+- Storage / Video・VRAM / Input / 厳密バスプロトコル / Fibonacci / RAM selftest は未実装。
+- `loaded_program` の system.json 永続化は未実装。
+- GUI 目視確認はヘッドレス環境のため未実施（下記「UI 確認点」参照）。
+
+### UI 上でユーザーが確認すべき点
+
+1. CPU を置いて Write/Run → `... blocked — no RAM/UART ...` が出るか。
+2. CPU+RAM+UART を置き、CPU↔RAM・CPU↔UART を wire 接続し、CPU に `hello_world.asm` を割り当て。
+3. `Write Program` → Log に `Circuit built: CPU=... RAM=[...] UART=[...]`。
+4. `Run` → UART Console に `Hello World !`。
+5. wire を 1 本外して Run → 再びブロックされるか。
+6. CPU を置かない従来のエディタタブ Build→Run が引き続き動くか。
+
+### 次に行うべき作業
+
+- ユーザー判断: アドレスマップ対応 / 複数デバイス対応 / RAM selftest・Fibonacci / Run Status Panel / UI ラフ受領 のいずれへ進むか
 
 ---
 

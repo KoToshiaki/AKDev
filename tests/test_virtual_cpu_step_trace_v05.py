@@ -19,7 +19,9 @@ from core.sim import Bus
 from ui.win import MainWin
 from core.project import create_project
 
-_CPU = {"id": "cpu.ak32", "name": "AK32", "category": "cpu"}
+_CPU  = {"id": "cpu.ak32", "name": "AK32", "category": "cpu"}
+_RAM  = {"id": "mem.ram",  "name": "RAM",  "category": "mem"}
+_UART = {"id": "io.uart",  "name": "UART", "category": "io"}
 _HELLO_WORLD = Path(__file__).parent / "test" / "hello_world.asm"
 _HELLO = Path(__file__).parent.parent / "src" / "hello.asm"
 _REL = "tests/test/hello_world.asm"
@@ -168,7 +170,12 @@ def _win(tmp_path):
 
 
 def _assign_hello_world(win, root):
-    win._canvas.add_part_at(_CPU, QPointF(0.0, 0.0))
+    # PATCH_VIRTUAL_CIRCUIT_RUNTIME_V05: a wired CPU+RAM+UART circuit is required.
+    win._canvas.add_part_at(_CPU,  QPointF(0.0, 0.0))     # node_0001 (CPU)
+    win._canvas.add_part_at(_RAM,  QPointF(200.0, 0.0))   # node_0002 (RAM)
+    win._canvas.add_part_at(_UART, QPointF(400.0, 0.0))   # node_0003 (UART)
+    win._canvas.add_connection("node_0001", "bus", "node_0002", "bus")
+    win._canvas.add_connection("node_0001", "bus", "node_0003", "bus")
     dst = root / "tests" / "test"
     dst.mkdir(parents=True, exist_ok=True)
     (dst / "hello_world.asm").write_text(

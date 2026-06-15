@@ -17,9 +17,19 @@ from ui.prop import PropPanel
 from ui.win import MainWin
 from core.project import create_project
 
-_CPU = {"id": "cpu.ak32", "name": "AK32", "category": "cpu"}
-_RAM = {"id": "mem.ram",  "name": "RAM",  "category": "mem"}
-_LIB = {_CPU["id"]: _CPU, _RAM["id"]: _RAM}
+_CPU  = {"id": "cpu.ak32", "name": "AK32", "category": "cpu"}
+_RAM  = {"id": "mem.ram",  "name": "RAM",  "category": "mem"}
+_UART = {"id": "io.uart",  "name": "UART", "category": "io"}
+_LIB  = {_CPU["id"]: _CPU, _RAM["id"]: _RAM, _UART["id"]: _UART}
+
+
+def _wire_full_circuit(win):
+    """Place CPU+RAM+UART and wire CPU↔RAM, CPU↔UART (PATCH_VIRTUAL_CIRCUIT_RUNTIME_V05)."""
+    win._canvas.add_part_at(_CPU,  QPointF(0.0, 0.0))     # node_0001
+    win._canvas.add_part_at(_RAM,  QPointF(200.0, 0.0))   # node_0002
+    win._canvas.add_part_at(_UART, QPointF(400.0, 0.0))   # node_0003
+    win._canvas.add_connection("node_0001", "bus", "node_0002", "bus")
+    win._canvas.add_connection("node_0001", "bus", "node_0003", "bus")
 
 _HI_SRC = Path(__file__).parent.parent / "src" / "hello.asm"
 
@@ -211,7 +221,7 @@ def test_open_source_opens_assigned(tmp_path):
 
 def test_build_run_uses_assigned_asm(tmp_path):
     win, root = _make_win_with_project(tmp_path)
-    win._canvas.add_part_at(_CPU, QPointF(0.0, 0.0))
+    _wire_full_circuit(win)
     (root / "src").mkdir(parents=True, exist_ok=True)
     (root / "src" / "hello.asm").write_text(_HI_SRC.read_text(encoding="utf-8"),
                                             encoding="utf-8")

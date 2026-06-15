@@ -360,6 +360,25 @@ PowerPoint のように、目的別にタブを分ける。
 
 ---
 
+## v0.5 PATCH_VIRTUAL_CIRCUIT_RUNTIME_V05（Virtual Circuit Runtime）
+
+> 固定内部回路で Hello World を出す構造から、**Canvas 由来の CircuitPlan をもとに
+> VirtualCircuitRuntime を生成**する構造へ移行。最小ゴール構成は CPU + RAM + UART。
+> 設計書: `PATCH_VIRTUAL_CIRCUIT_RUNTIME_V05_ROADMAP.md` ／ 進捗: `..._CHECKLIST.md`。
+> 仕様: `UI_SPEC_V05.md` 11-N。
+
+| 項目 | 概要 |
+|---|---|
+| CircuitPlan | `core/circuit.py` `resolve_circuit(nodes, connections)`。CPU/RAM/UART 検出 + CPU–RAM・CPU–UART 接続解析。`{ok,issues,cpu,rams,uarts,cpu_present}` |
+| circuit mode | Canvas に CPU があれば plan を解決。未接続なら Write/Build/Run/Step をブロック |
+| runtime 生成 | `_make_sim(plan)` で接続構成から runtime を生成。Write は接続 RAM へ、Run/Step は接続 CPU を動かし、OUT は接続 UART へ |
+| legacy mode | CPU 未配置なら従来の固定 runtime（非 Canvas テスト・エディタタブ Build/Run を保持）|
+| テスト更新 | 既存 Hello World テストを CPU+RAM+UART 配置・配線へ更新 |
+| 互換 | hello.asm "Hi"・legacy Build/Run・runtime API は不変 |
+| 次候補 | アドレスマップ / 複数デバイス / Storage・Video・Input / Fibonacci・RAM selftest |
+
+---
+
 ## v0.5 でやらないこと
 
 | 項目 | 理由 |

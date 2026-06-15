@@ -2,26 +2,75 @@
   "chips": [],
   "parts": [
     {
-      "node_id": "node_0003",
-      "part_id": "mem.ram",
-      "name": "RAM",
-      "x": -81.0,
-      "y": -116.0,
+      "node_id": "node_0005",
+      "part_id": "io.uart",
+      "name": "UART",
+      "x": 708.16,
+      "y": 402.43,
       "sources": {
         "asm": null,
         "hdl": null
-      }
+      },
+      "visual_ports": [
+        {
+          "id": "vp_0004",
+          "side": "left",
+          "offset": 12.0,
+          "kind": "bus",
+          "label": "bus",
+          "locked": false
+        }
+      ]
+    },
+    {
+      "node_id": "node_0004",
+      "part_id": "mem.ram",
+      "name": "RAM",
+      "x": 700.72,
+      "y": 209.03,
+      "sources": {
+        "asm": null,
+        "hdl": null
+      },
+      "visual_ports": [
+        {
+          "id": "vp_0002",
+          "side": "left",
+          "offset": 12.0,
+          "kind": "bus",
+          "label": "bus",
+          "locked": false
+        }
+      ]
     },
     {
       "node_id": "node_0002",
       "part_id": "cpu.ak32",
       "name": "AK32 CPU",
-      "x": -366.0,
-      "y": -65.0,
+      "x": 439.15,
+      "y": 195.04,
       "sources": {
         "asm": "hello_world.asm",
         "hdl": null
-      }
+      },
+      "visual_ports": [
+        {
+          "id": "vp_0001",
+          "side": "right",
+          "offset": 12.0,
+          "kind": "bus",
+          "label": "bus",
+          "locked": false
+        },
+        {
+          "id": "vp_0003",
+          "side": "right",
+          "offset": 28.0,
+          "kind": "bus",
+          "label": "bus",
+          "locked": false
+        }
+      ]
     }
   ],
   "links": [],

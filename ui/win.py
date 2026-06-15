@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QMimeData, QUrl
 
 from asm.asm import AsmError, assemble_ex
+from core.circuit import resolve_circuit
 from core.cpu import AK32Part
 from core.dev import RamPart, UartPart
 from core.project import create_project, load_project, load_target, save_system
@@ -134,6 +135,16 @@ class MainWin(QMainWindow):
     def _setup_sim(self):
         self._sim_cycle: int        = 0   # init before Bus so cycle_fn lambda works
         self._pause_requested: bool = False
+        self._make_sim()
+
+    def _make_sim(self, plan: "dict | None" = None):
+        """(Re)create the virtual circuit devices + runtime.
+
+        Called once at startup (legacy fixed circuit) and again when a Canvas
+        circuit is written, so the runtime is bound to the resolved CircuitPlan
+        (PATCH_VIRTUAL_CIRCUIT_RUNTIME_V05). The address map is the default fixed
+        one for now (RAM 0x0000 / UART 0x0100); an address editor is out of scope.
+        """
         self._sim_bus  = Bus(cycle_fn=lambda: self._sim_cycle)
         self._sim_ram  = RamPart("sim_ram",  "RAM",  size=_SIM_RAM_SIZE,  base=_SIM_RAM_BASE)
         self._sim_uart = UartPart("sim_uart", "UART", base=_SIM_UART_BASE)
@@ -142,10 +153,56 @@ class MainWin(QMainWindow):
         self._sim_bus.attach(self._sim_uart, _SIM_UART_BASE, _SIM_UART_SIZE)
         self._sim_bus.tracing = True      # enable bus tracing
         # Virtual circuit runtime — wraps the devices for stepped, traced execution
-        # (PATCH_VIRTUAL_CPU_STEP_TRACE_V05). Physically this is host Python, but it
-        # models AKDev's virtual CPU/RAM/UART advanced one instruction at a time.
+        # (PATCH_VIRTUAL_CPU_STEP_TRACE_V05) and is bound to a Canvas-derived
+        # CircuitPlan (PATCH_VIRTUAL_CIRCUIT_RUNTIME_V05). Physically host Python,
+        # but models AKDev's virtual CPU/RAM/UART advanced one instruction at a time.
         self._runtime = VirtualCircuitRuntime(
             self._sim_bus, self._sim_ram, self._sim_uart, self._sim_cpu
+        )
+        self._runtime.plan = plan
+
+    # ----------------------------------------- circuit resolve (PATCH_VIRTUAL_CIRCUIT_RUNTIME_V05)
+
+    def _resolve_circuit_plan(self) -> dict:
+        """Resolve a CircuitPlan from the current Canvas topology."""
+        nodes = [
+            {"node_id": n.node_id(),
+             "category": n.part().get("category", ""),
+             "part_id":  n.part().get("id", ""),
+             "name":     n.part().get("name", "")}
+            for n in self._canvas.get_all_nodes()
+        ]
+        conns = [
+            {"from_node": c["from"]["node_id"], "to_node": c["to"]["node_id"]}
+            for c in self._canvas.export_canvas()["connections"]
+        ]
+        return resolve_circuit(nodes, conns)
+
+    def _circuit_guard(self, action: str) -> "dict | None":
+        """Return the plan if execution is allowed, else None (and log the block).
+
+        In *circuit mode* (any CPU on canvas) the circuit must be fully wired
+        (CPU↔RAM, CPU↔UART). In *legacy mode* (no CPU placed) the fixed runtime
+        is used and nothing is blocked, preserving existing non-canvas flows.
+        """
+        plan = self._resolve_circuit_plan()
+        if plan["cpu_present"] and not plan["ok"]:
+            self._log.append(f"{action} blocked — " + "; ".join(plan["issues"]))
+            return None
+        return plan
+
+    def _bind_circuit_runtime(self, plan: dict) -> None:
+        """Rebuild the virtual circuit runtime bound to a resolved CircuitPlan.
+
+        Called by Write Program / Build (a load operation): fresh devices are
+        created and the program is loaded immediately after. Run/Step never call
+        this (they keep the loaded runtime).
+        """
+        self._make_sim(plan)
+        self._sim_cycle = 0
+        self._log.append(
+            f"Circuit built: CPU={plan['cpu']} "
+            f"RAM={plan['rams']} UART={plan['uarts']}"
         )
 
     # ------------------------------------------------------------------ helpers
@@ -582,6 +639,13 @@ class MainWin(QMainWindow):
 
     def _build(self):
         root = self._project_root
+        # PATCH_VIRTUAL_CIRCUIT_RUNTIME_V05: in circuit mode, gate on connectivity
+        # and bind the runtime to the resolved circuit before loading.
+        plan = self._circuit_guard("Build")
+        if plan is None:
+            return
+        if plan["cpu_present"]:
+            self._bind_circuit_runtime(plan)
         # PATCH_PART_PROGRAM_ASSIGN_V05: prefer an asm assigned to a part (priority:
         # selected node > CPU part > any). Falls back to the editor-tab build when
         # nothing is assigned, so the existing flow / hello.asm path is unchanged.
@@ -675,6 +739,15 @@ class MainWin(QMainWindow):
         if root is None:
             self._log.append("Write Program: New Project / Open Project を先に行ってください")
             return False
+        # PATCH_VIRTUAL_CIRCUIT_RUNTIME_V05: in circuit mode the circuit must be
+        # fully wired (CPU↔RAM, CPU↔UART) and the program is written to the
+        # connected RAM of the resolved CPU.
+        plan = self._circuit_guard("Write Program")
+        if plan is None:
+            return False
+        if plan["cpu_present"]:
+            self._bind_circuit_runtime(plan)
+            prefer_node_id = plan["cpu"]   # write to the resolved CPU's program
         resolved = self._canvas.resolve_program_node("asm", prefer_node_id)
         if resolved is None:
             self._log.append("No ASM source assigned")
@@ -810,6 +883,8 @@ class MainWin(QMainWindow):
 
     def _do_step(self):
         """Execute one instruction on the virtual CPU and trace it."""
+        if self._circuit_guard("Step") is None:
+            return
         if not self._has_program():
             self._log.append("No program loaded. Use Write Program first.")
             return
@@ -825,6 +900,8 @@ class MainWin(QMainWindow):
 
     def _do_run(self):
         """Run = repeated Step, up to 1000 instructions or until halted."""
+        if self._circuit_guard("Run") is None:
+            return
         if not self._has_program():
             self._log.append("No program loaded. Use Write Program first.")
             return

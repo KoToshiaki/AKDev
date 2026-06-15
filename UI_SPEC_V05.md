@@ -932,6 +932,53 @@ API: `load_program` / `reset` / `step` / `run` / `registers` / `memory_snapshot`
 
 ---
 
+## 11-N. Virtual Circuit Runtime（PATCH_VIRTUAL_CIRCUIT_RUNTIME_V05）
+
+> 固定の内部 `_sim_cpu/_sim_ram/_sim_uart` で Hello World を出す構造から、**Canvas 由来の
+> CircuitPlan をもとに VirtualCircuitRuntime を生成する構造**へ移行。AKDev の目的（Canvas で
+> 組んだ回路を Run で実行する）に実装を一致させる。最小ゴール構成は **CPU + RAM + UART**。
+
+### CircuitPlan（`core/circuit.py`）
+
+`resolve_circuit(nodes, connections) -> plan` が Canvas トポロジから実行構成を導出する。
+
+- CPU = category `cpu` / RAM = category `mem` / UART = category `io` かつ name·part_id に `uart`。
+- CPU–RAM・CPU–UART の wire 接続（ノード隣接）を解析。
+- 返値 `{ok, issues, cpu, rams, uarts, cpu_present}`。
+- issues: CPU 不在 / 複数 CPU / RAM 不在 / CPU が RAM 未接続 / UART 不在 / CPU が UART 未接続。
+
+### 実行モード
+
+| モード | 条件 | 挙動 |
+|---|---|---|
+| **circuit mode** | Canvas に CPU が 1 つ以上 | plan を解決。未接続/不正なら **Write/Build/Run/Step をブロック**。OK なら plan から runtime を生成し、接続 RAM へ書き込み・接続 CPU を実行・接続 UART へ出力 |
+| **legacy mode** | CPU 未配置 | 従来の固定 runtime（既存の非 Canvas テスト・エディタタブ Build/Run を保持）|
+
+### MainWin 連携
+
+- `_make_sim(plan)`: 仮想回路デバイス + runtime を生成（startup と Write/Build 時の再生成で共用）。
+- `_circuit_guard(action)`: circuit mode で plan.ok でなければブロックログ + 中断。
+- `write_program` / `_build`: circuit mode で guard → runtime を plan にバインド（`_bind_circuit_runtime`）→ 接続 RAM へロード。asm は接続 CPU の `sources.asm` を優先解決。
+- `_do_run` / `_do_step`: guard のみ（未接続でブロック。runtime は再生成せずロード済み状態を保持）。
+
+### アドレスマップ
+
+- 当面はデフォルト固定（RAM 0x0000 / UART 0x0100）。アドレスマップエディタは対象外（将来）。
+  「どのパーツが・接続されているか」を plan が決定し、実行を gate / bind する。
+
+### ログ例
+
+- `Circuit built: CPU=node_0001 RAM=['node_0002'] UART=['node_0003']`
+- `Write Program blocked — CPU node_0001 is not wired to any RAM`
+- `Run blocked — no UART part on canvas`
+
+### 今回やらないこと
+
+Storage / Video・VRAM / Input / 厳密バスプロトコル / アドレスマップエディタ / Fibonacci /
+RAM selftest / 複数 CPU 本対応 / 実機書き込み / HDL 合成。
+
+---
+
 ## 12. ユーザー UI ラフ反映欄
 
 > **このセクションはユーザーが UI ラフを作成した後に更新する。**
