@@ -12,7 +12,12 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QMimeData, QUrl
 
 from asm.asm import AsmError, assemble_ex
-from core.circuit import resolve_circuit
+from core.circuit import (
+    resolve_circuit,
+    build_address_map,
+    validate_address_map,
+    format_address_map_summary,
+)
 from core.cpu import AK32Part
 from core.dev import RamPart, UartPart
 from core.project import create_project, load_project, load_target, save_system
@@ -165,27 +170,37 @@ class MainWin(QMainWindow):
             # Devices derived from the resolved plan. Keep the device ids stable
             # (sim_ram/sim_uart/sim_cpu) so bus tracing, the signal overlay and the
             # runtime's UART detection key are unchanged; record the plan node ids.
-            self._sim_ram  = RamPart("sim_ram",  "RAM",  size=_CIRCUIT_RAM_SIZE, base=_SIM_RAM_BASE)
-            self._sim_uart = UartPart("sim_uart", "UART", base=_SIM_UART_BASE)
-            self._sim_cpu  = AK32Part("sim_cpu",  "AK32", self._sim_bus, reset_pc=_SIM_RAM_BASE)
-            # RAM occupies the full address space except the UART MMIO window.
-            uart_end = _SIM_UART_BASE + _SIM_UART_SIZE
-            self._sim_bus.attach(self._sim_ram,  _SIM_RAM_BASE,  _SIM_UART_BASE - _SIM_RAM_BASE)
-            self._sim_bus.attach(self._sim_uart, _SIM_UART_BASE, _SIM_UART_SIZE)
-            self._sim_bus.attach(self._sim_ram,  uart_end,       _CIRCUIT_RAM_SIZE - uart_end)
+            ram_size = _CIRCUIT_RAM_SIZE
             self._sim_ram_node  = plan["rams"][0]
             self._sim_uart_node = plan["uarts"][0]
             self._sim_cpu_node  = plan["cpu"]
+            mode = "circuit"
         else:
             # Legacy fixed circuit (unchanged behaviour).
-            self._sim_ram  = RamPart("sim_ram",  "RAM",  size=_SIM_RAM_SIZE,  base=_SIM_RAM_BASE)
-            self._sim_uart = UartPart("sim_uart", "UART", base=_SIM_UART_BASE)
-            self._sim_cpu  = AK32Part("sim_cpu",  "AK32", self._sim_bus, reset_pc=_SIM_RAM_BASE)
-            self._sim_bus.attach(self._sim_ram,  _SIM_RAM_BASE,  _SIM_RAM_SIZE)
-            self._sim_bus.attach(self._sim_uart, _SIM_UART_BASE, _SIM_UART_SIZE)
+            ram_size = _SIM_RAM_SIZE
             self._sim_ram_node  = None
             self._sim_uart_node = None
             self._sim_cpu_node  = None
+            mode = "legacy"
+
+        self._sim_ram  = RamPart("sim_ram",  "RAM",  size=ram_size,    base=_SIM_RAM_BASE)
+        self._sim_uart = UartPart("sim_uart", "UART", base=_SIM_UART_BASE)
+        self._sim_cpu  = AK32Part("sim_cpu",  "AK32", self._sim_bus, reset_pc=_SIM_RAM_BASE)
+
+        # Build the Address Map (PATCH_ADDRESS_MAP_V07) and attach devices to the
+        # bus exactly per the map's attach ranges, so the bus and the Address Map
+        # stay consistent. In circuit mode the UART is an MMIO window inside RAM,
+        # so RAM is attached around it (no real bus overlap).
+        amap = build_address_map(
+            mode=mode,
+            ram_node=self._sim_ram_node, ram_base=_SIM_RAM_BASE, ram_size=ram_size,
+            uart_node=self._sim_uart_node, uart_base=_SIM_UART_BASE, uart_size=_SIM_UART_SIZE,
+        )
+        parts_by_id = {"sim_ram": self._sim_ram, "sim_uart": self._sim_uart}
+        for dev in amap["devices"]:
+            part = parts_by_id[dev["device_id"]]
+            for lo, hi in dev["attach_ranges"]:
+                self._sim_bus.attach(part, lo, hi - lo + 1)
 
         self._sim_bus.tracing = True      # enable bus tracing
         # Virtual circuit runtime — wraps the devices for stepped, traced execution
@@ -197,6 +212,11 @@ class MainWin(QMainWindow):
             self._sim_bus, self._sim_ram, self._sim_uart, self._sim_cpu
         )
         self._runtime.plan = plan
+        self._runtime.address_map = amap   # PATCH_ADDRESS_MAP_V07
+
+    def address_map(self) -> "dict | None":
+        """Return the current Address Map (device layout on the bus)."""
+        return self._runtime.address_map
 
     # ----------------------------------------- circuit resolve (PATCH_VIRTUAL_CIRCUIT_RUNTIME_V05)
 
@@ -241,6 +261,17 @@ class MainWin(QMainWindow):
             f"Circuit built: CPU={plan['cpu']} "
             f"RAM={plan['rams']} UART={plan['uarts']}"
         )
+        self._log_address_map()
+
+    def _log_address_map(self) -> None:
+        """Emit the current Address Map summary (+ any overlap issues) to the Log."""
+        amap = self._runtime.address_map
+        if not amap:
+            return
+        for line in format_address_map_summary(amap):
+            self._log.append(line)
+        for issue in validate_address_map(amap):
+            self._log.append(f"Address Map issue: {issue}")
 
     # ------------------------------------------------------------------ helpers
 
@@ -947,6 +978,11 @@ class MainWin(QMainWindow):
             return
         self._pause_requested = False
         self._log.append("Run started")
+        # Show the Address Map at run time for circuit-mode runs (PATCH_ADDRESS_MAP_V07).
+        # Legacy runs keep their original log output unchanged.
+        amap = self._runtime.address_map
+        if amap and amap.get("mode") == "circuit":
+            self._log_address_map()
         self._console.appendPlainText("[run] started\n")
         traces: list[dict] = []
         halted = False

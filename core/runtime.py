@@ -82,6 +82,9 @@ class VirtualCircuitRuntime:
         self.step_count: int = 0
         self.last_trace: "dict | None" = None
         self.trace_history: list[dict] = []
+        # Address map describing the device layout on the bus (PATCH_ADDRESS_MAP_V07).
+        # Set by MainWin after construction; None until a circuit/legacy map is built.
+        self.address_map: "dict | None" = None
 
     # ---- program loading ----
 
