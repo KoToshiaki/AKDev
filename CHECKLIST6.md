@@ -1,21 +1,54 @@
 # AKDev CHECKLIST 6
 
-> v0.5 UI Polish & Usability の進捗管理チェックリスト。
+> ═══════════════════════════════════════════════════════════
+> # ✅ v0.6 PHASE COMPLETE — 2026-06-16
+> ═══════════════════════════════════════════════════════════
+>
+> v0.6 は正式に完了（PHASE COMPLETE）した。後続は `CHECKLIST7.md` / `ROADMAP7.md`
+> （v0.7: Plan-driven Virtual Devices & Address Map）に一本化する。本ファイルは履歴として
+> 削除せず保管する（v0.6 進行中ではない）。
+>
+> **最終テスト**: `python -m pytest tests/` **779 passed**（2026-06-16）
+>
+> **v0.6 達成機能**: Program/Sources 割り当て / Write Program / Virtual CPU Step & Trace /
+> Virtual Circuit Runtime 最小構成 / CircuitPlan による CPU・RAM・UART 接続解析 /
+> 未接続時の Write/Build/Run/Step ブロック / 接続済み構成で Hello World 実行。
+>
+> **v0.7 へ送る残課題**: CircuitPlan から実デバイス生成 / RAM・UART が固定 runtime 寄り /
+> RAM サイズ拡張 / Address Map / CPU・RAM Validation / Target CPU Selection /
+> Run Status Panel / Port Detail。
+>
+> **完了済みパッチ資料（`old/` へ収納済み・2026-06-16）**: 以下 12 パッチ ×（ROADMAP/CHECKLIST）を
+> `old/` へ移動した（CLAUDE.md §4 + 既存 old/ 慣例に従う）。
+> `old/PATCH_WIRING_V05_*` / `old/PATCH_PART_VISUAL_V05_*` / `old/PATCH_WIRING_PORTS_V05_*` /
+> `old/PATCH_PORT_DRAG_CONNECT_V05_*` / `old/PATCH_WIRE_HOVER_FEEDBACK_V05_*` /
+> `old/PATCH_WIRE_SELECT_DELETE_V05_*` / `old/PATCH_VISUAL_PORT_MOVE_V05_*` /
+> `old/PATCH_WIRE_STYLE_V05_*` / `old/PATCH_PART_PROGRAM_ASSIGN_V05_*` /
+> `old/PATCH_CIRCUIT_WRITE_RUN_HELLO_V05_*` / `old/PATCH_VIRTUAL_CPU_STEP_TRACE_V05_*` /
+> `old/PATCH_VIRTUAL_CIRCUIT_RUNTIME_V05_*`。
+>
+> **下記 §11〜14（UI ラフ反映 / 実装範囲確定）の扱い**: v0.6 ではやらない。runtime 実装へ主軸が
+> 移ったため、UI ラフ反映系は **v0.7 以降へ移管 / 保留**とする（v0.6 の完了判定からは除外）。
+> よって以下の本文チェックリストに残る未 `[x]` 項目は「v0.6 未着手のまま完了扱い・v0.7 以降で再評価」。
+>
+> ═══════════════════════════════════════════════════════════
+
+> v0.5 UI Polish & Usability の進捗管理チェックリスト（v0.6 フェーズの記録）。
 > 設計詳細は `ROADMAP6.md` を参照。
 > UI 仕様は `UI_SPEC_V05.md` を参照。
 >
-> 個別パッチの進捗は別ファイル:
-> `PATCH_WIRING_V05_CHECKLIST.md` / `PATCH_PART_VISUAL_V05_CHECKLIST.md` /
-> `PATCH_WIRING_PORTS_V05_CHECKLIST.md` /
-> `PATCH_PORT_DRAG_CONNECT_V05_CHECKLIST.md`（Port Drag Connect）/
-> `PATCH_WIRE_HOVER_FEEDBACK_V05_CHECKLIST.md`（Hover Feedback）/
-> `PATCH_WIRE_SELECT_DELETE_V05_CHECKLIST.md`（Wire Select & Delete）/
-> `PATCH_VISUAL_PORT_MOVE_V05_CHECKLIST.md`（Visual Port Move）/
-> `PATCH_WIRE_STYLE_V05_CHECKLIST.md`（Wire Style）/
-> `PATCH_PART_PROGRAM_ASSIGN_V05_CHECKLIST.md`（Program / Sources 割り当て）/
-> `PATCH_CIRCUIT_WRITE_RUN_HELLO_V05_CHECKLIST.md`（Write Program to Circuit）/
-> `PATCH_VIRTUAL_CPU_STEP_TRACE_V05_CHECKLIST.md`（Virtual CPU Step & Trace）/
-> `PATCH_VIRTUAL_CIRCUIT_RUNTIME_V05_CHECKLIST.md`（Virtual Circuit Runtime）。
+> 個別パッチの進捗は別ファイル（すべて `old/` へ収納済み）:
+> `old/PATCH_WIRING_V05_CHECKLIST.md` / `old/PATCH_PART_VISUAL_V05_CHECKLIST.md` /
+> `old/PATCH_WIRING_PORTS_V05_CHECKLIST.md` /
+> `old/PATCH_PORT_DRAG_CONNECT_V05_CHECKLIST.md`（Port Drag Connect）/
+> `old/PATCH_WIRE_HOVER_FEEDBACK_V05_CHECKLIST.md`（Hover Feedback）/
+> `old/PATCH_WIRE_SELECT_DELETE_V05_CHECKLIST.md`（Wire Select & Delete）/
+> `old/PATCH_VISUAL_PORT_MOVE_V05_CHECKLIST.md`（Visual Port Move）/
+> `old/PATCH_WIRE_STYLE_V05_CHECKLIST.md`（Wire Style）/
+> `old/PATCH_PART_PROGRAM_ASSIGN_V05_CHECKLIST.md`（Program / Sources 割り当て）/
+> `old/PATCH_CIRCUIT_WRITE_RUN_HELLO_V05_CHECKLIST.md`（Write Program to Circuit）/
+> `old/PATCH_VIRTUAL_CPU_STEP_TRACE_V05_CHECKLIST.md`（Virtual CPU Step & Trace）/
+> `old/PATCH_VIRTUAL_CIRCUIT_RUNTIME_V05_CHECKLIST.md`（Virtual Circuit Runtime）。
 
 ---
 

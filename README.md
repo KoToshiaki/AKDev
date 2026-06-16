@@ -53,4 +53,12 @@ python main.py
 
 ## Status
 
-v0.4.1 — Visual Debug Canvas polish patch. See [ROADMAP5.md](ROADMAP5.md) for details.
+**v0.6 PHASE COMPLETE (2026-06-16)** — UI Polish & Usability plus the Virtual Circuit
+Runtime foundation (Program/Sources assignment, Write Program, Virtual CPU Step & Trace,
+Canvas-derived CircuitPlan, connectivity-gated Write/Build/Run/Step). `pytest tests/`
+= 779 passed.
+
+Current phase: **v0.7 — Plan-driven Virtual Devices & Address Map**. See
+[ROADMAP7.md](ROADMAP7.md) / [CHECKLIST7.md](CHECKLIST7.md). The completed v0.6 phase
+plan is in [ROADMAP6.md](ROADMAP6.md) / [CHECKLIST6.md](CHECKLIST6.md) (kept for history;
+completed patch docs archived under `old/`).

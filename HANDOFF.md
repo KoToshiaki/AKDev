@@ -1,8 +1,72 @@
 # AKDev 引き継ぎメモ
 
-更新日: 2026-06-15（PATCH_VIRTUAL_CIRCUIT_RUNTIME_V05 — Virtual Circuit Runtime）
+更新日: 2026-06-16（✅ v0.6 PHASE COMPLETE / v0.7 開始準備）
 
 ---
+
+## ✅ v0.6 PHASE COMPLETE（2026-06-16）— 現在フェーズは v0.7
+
+### 次に作業する人へ（要点）
+
+- **v0.6 は正式に完了（PHASE COMPLETE）**。後続は `ROADMAP7.md` / `CHECKLIST7.md` に一本化。
+- **現在の開発フェーズ = v0.7（Plan-driven Virtual Devices & Address Map）**。
+- **v0.7 最初の推奨パッチ = `PATCH_PLAN_DRIVEN_DEVICES_V07`**（着手前に同名 ROADMAP/CHECKLIST を作成）。
+- **最重要注意**: まだ Plan は実デバイス生成まで完全には使われていない。`win._runtime.plan` に
+  node_id は入るが、実行は固定 `_sim_ram`/`_sim_uart`/`_sim_cpu`（256B 固定）。v0.7 では
+  **Plan-driven Devices を最優先**にする。
+- `tests/test/system.json` はテスト実行で差分（node_id / 座標）を出す場合がある。**勝手に
+  破棄・コミットしない**（破棄 / コミット / .gitignore 化はユーザー判断）。
+- v0.6 完了パッチ資料（`PATCH_*_V05_*` 12 パッチ ×2）は `old/` へ収納済み。
+
+### 最新状態
+
+- `python -m pytest tests/` **779 passed**（2026-06-16 確認・21 warnings は PySide6 Deprecation のみ）
+- `git branch` = `dev` / 最新コミット `a416848 feat: run programs on canvas-derived virtual circuit`
+- 注: 本整理（v0.6 PHASE COMPLETE のドキュメント更新と `old/` への収納）は **未コミット**。
+
+### v0.6 完了条件の充足
+
+| 条件 | 状態 |
+|---|---|
+| Program / Sources 割り当て | ✅ |
+| Write Program | ✅ |
+| Virtual CPU Step & Trace が動く | ✅ `core/runtime.py` / `test_virtual_cpu_step_trace_v05`(21) |
+| Virtual Circuit Runtime 最小構成が動く | ✅ `core/circuit.py` / `test_virtual_circuit_runtime_v05`(16) |
+| CPU/RAM/UART 未接続で Write/Build/Run/Step ブロック | ✅ `_circuit_guard` |
+| 接続済み CPU/RAM/UART で Hello World | ✅ `test_write_then_run_outputs_hello_world` |
+| pytest 全件通過 | ✅ 779 passed |
+| HANDOFF に現在状況が記録 | ✅ 本セクション |
+
+### v0.7 へ送る残課題
+
+- CircuitPlan から実デバイス（RAM/UART）を生成する構造（plan が実体化されていない）。
+- RAM/UART が固定 runtime 寄り／RAM サイズ拡張（現状 256B）。
+- Address Map（base/size 管理・overlap 検出・表示）。
+- CPU/RAM Validation（selftest / Fibonacci を Canvas 由来 runtime 上で検証）。
+- Target CPU Selection（複数 CPU 時の実行対象選択）。
+- Run Status Panel / Port Detail。
+
+### GUI 目視確認が必要な項目（v0.7 着手後）
+
+- CPU+RAM+UART 配線 → Write → Run で UART Console に Hello World。
+- RAM 拡張後のメモリビューア表示。
+- Address Map / Run Status Panel / Port Detail（実装後）。
+- legacy（CPU 未配置）エディタタブ Build→Run が引き続き動くか。
+
+<details>
+<summary>（参考）v0.6 終了整理時の旧メモ</summary>
+
+#### v0.6 はここで終了扱い
+
+「UI Polish & Usability」として始まり、後半で **Virtual CPU Step & Trace** と
+**Virtual Circuit Runtime（最小構成）** まで到達した。計画ファイルは `ROADMAP6.md` /
+`CHECKLIST6.md`（PHASE COMPLETE マーク付き・削除せず保管）。各 PATCH の詳細は本ファイル下部に時系列で残す。
+
+</details>
+
+---
+
+## （以下は時系列の PATCH 履歴 — v0.6 フェーズ内で完了済み。最新の要点は上部を参照）
 
 ## 現在の状況（PATCH_VIRTUAL_CIRCUIT_RUNTIME_V05 — Virtual Circuit Runtime）
 

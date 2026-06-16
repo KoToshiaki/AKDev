@@ -1,5 +1,32 @@
 # AKDev ROADMAP 6
 
+> ═══════════════════════════════════════════════════════════
+> # ✅ v0.6 PHASE COMPLETE — 2026-06-16
+> ═══════════════════════════════════════════════════════════
+>
+> このフェーズは正式に完了（PHASE COMPLETE）した。後続は `ROADMAP7.md` / `CHECKLIST7.md`
+> （v0.7: Plan-driven Virtual Devices & Address Map）に一本化する。本ファイルの内容は
+> 履歴として削除せず保管する（v0.6 進行中ではない）。
+>
+> - **完了日**: 2026-06-16
+> - **最終テスト**: `python -m pytest tests/` **779 passed**
+> - **達成した主要機能**: Program/Sources 割り当て / Write Program / Virtual CPU Step & Trace /
+>   Virtual Circuit Runtime 最小構成 / CircuitPlan による CPU・RAM・UART 接続解析 /
+>   未接続時の Write/Build/Run/Step ブロック / 接続済み構成で Hello World 実行。
+> - **v0.7 へ送る残課題**: CircuitPlan から実デバイス生成 / RAM・UART が固定 runtime 寄り /
+>   RAM サイズ拡張 / Address Map / CPU・RAM Validation / Target CPU Selection /
+>   Run Status Panel / Port Detail。
+> - **完了済みパッチ資料**: v0.6 の `PATCH_*_V05_*`（12 パッチ ×2）は `old/` へ収納済み
+>   （`CHECKLIST6.md` 冒頭に一覧）。
+>
+> このフェーズは見出し上「UI Polish & Usability」として始まり、後半で Virtual CPU Step & Trace /
+> Virtual Circuit Runtime（最小構成）まで到達した。各 PATCH の詳細は本ファイル末尾の
+> セクションと `HANDOFF.md` を参照。
+> 注: 見出しの「v0.5」表記とユーザーが用いる「v0.6」表記のずれは既知。
+> バージョン表記の正規化はユーザー判断事項として保留する。
+
+---
+
 > v0.5 UI Polish & Usability の開発計画。
 > v0.4 / v0.4.1 完了時点の計画は `old/ROADMAP5.md` / `old/PATCH_V041_ROADMAP.md` を参照。
 > 進捗管理は `CHECKLIST6.md` で行う。
