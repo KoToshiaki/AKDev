@@ -21,6 +21,8 @@
   - `core/ports.py` 追加 / `parts/**/part.json` 11 種を v2 へ migration / `ui/lib.py` 正規化 / `ui/port_detail.py` 明示値優先表示
   - `python -m pytest tests/` → **878 passed**（860 + 新規 18）
   - 次候補: `PATCH_PORT_DIRECTION_WIDTH_VALIDATION_V08`（接続時 direction/width 検証）
+* [x] 次候補 `PATCH_PORT_DIRECTION_WIDTH_VALIDATION_V08` の設計資料を作成した（2026-06-17）
+  - `PATCH_PORT_DIRECTION_WIDTH_VALIDATION_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・初手 warning only 方針**
 * [ ] v0.8 テーマを確定する（候補: Device Expansion & Connection Validation）
   - 完了条件: ユーザーがテーマと最初のパッチを決定する
 * [ ] 最初のパッチ（`PATCH_PORT_SCHEMA_V08` 想定）の実装範囲をユーザーが承認する
