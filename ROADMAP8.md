@@ -63,6 +63,9 @@ v0.8 は、この実行基盤の上で **接続の妥当性検証** と **デバ
   `IN` 命令不要。新 device を置かない限り現行互換。実装は分割案（`PATCH_INPUT_DEVICE_V08` 先行 →
   `PATCH_ROM_DEVICE_V08`）も検討。設計資料: `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08_ROADMAP.md` /
   `..._CHECKLIST.md`（実装は未着手）。
+- **分割の先行候補 `PATCH_INPUT_DEVICE_V08` を設計中**（Input 単独・低リスク）。`io.input`（MMIO・
+  `sim_input`）を追加し `LD` で読む（`IN` 命令不要）。設計資料: `PATCH_INPUT_DEVICE_V08_ROADMAP.md` /
+  `..._CHECKLIST.md`（実装は未着手）。
 
 ### E. Address Map Editor
 - ユーザーによる base/size の任意編集 UI（v0.7 は固定既定）。

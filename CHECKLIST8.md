@@ -61,6 +61,8 @@
   - GUI で per-device base/size override（auto/manual・Reset to Auto・range/overlap/align validation・error は Apply ブロック）・system.json 永続化
   - `python -m pytest tests/` → **1011 passed**（988 + 新規 23）
   - 次候補: `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08` または `PATCH_AK32_INSTRUCTION_EXPANSION_V08`
+* [x] 分割先行候補 `PATCH_INPUT_DEVICE_V08` の設計資料を作成した（2026-06-18）
+  - `PATCH_INPUT_DEVICE_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・Input 単独（MMIO・`sim_input`・`LD` で読む・`IN` 命令不要）・Input 非配置は現行互換・`assign_mmio_bases` を kind 単位 runtime-backing へ調整する点が要**
 * [x] 次候補 `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08` の設計資料を作成した（2026-06-18）
   - `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・ROM/Input 優先（Input は LD で読め IN 命令不要）・VRAM/Storage は後続・新 device 無しは現行互換・分割案（INPUT 先行 → ROM）あり**
 * [ ] v0.8 テーマを確定する（候補: Device Expansion & Connection Validation）
