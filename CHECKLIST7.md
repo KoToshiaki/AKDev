@@ -125,15 +125,18 @@
 
 # 7. Port Detail（PATCH_PORT_DETAIL_V07）
 
-* [ ] Port Detail の表示トリガーを実装する（ダブルクリック / コンテキストメニュー）
-* [ ] 論理ポート（part.json `ports`）を表示する
-* [ ] visual port を表示する
-* [ ] direction を表示する
-* [ ] width を表示する
-* [ ] connection 情報を表示する
-* [ ] 選択切替で内容が更新される
-* [ ] テストを追加する（ポート情報表示 / 選択切替更新）
-* [ ] `pytest tests/` 全通過
+* [x] Port Detail の表示トリガーを実装する（選択変更 / wire 選択 / 接続変更で更新・Debug リボンでトグル）
+  - ダブルクリック/コンテキストメニュー起動ではなく、選択連動の read-only パネルとして実装
+* [x] 論理ポート（part.json `ports`）を表示する（name / type / direction / width）
+* [x] visual port を表示する（id / label / side / offset / kind / locked / connected）
+* [x] direction を表示する（type から推定: master/slave/in/bidir）
+* [x] width を表示する（part.json 未定義なら `-`）
+* [x] connection 情報を表示する（conn id / from-to / peer node / peer part / direction / kind / width / style）
+* [x] 選択切替で内容が更新される（+ wire 選択 / 接続作成・削除後）
+* [x] テストを追加する（ポート情報表示 / 選択切替更新）
+  - `tests/test_port_detail_v07.py`（18 件）
+* [x] `pytest tests/` 全通過
+  - 2026-06-17 確認: **860 passed**（8.85s）
 
 ---
 

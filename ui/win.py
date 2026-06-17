@@ -30,6 +30,7 @@ from ui.memview import MemoryViewer
 from ui.prop import PropPanel
 from ui.ribbon import RibbonBar
 from ui.run_status import RunStatusPanel
+from ui.port_detail import PortDetailPanel, build_node_info, build_wire_info
 
 # Minimal simulation memory map (kept within 16-bit immediate range for LDI).
 _SIM_RAM_BASE  = 0x0000
@@ -80,16 +81,19 @@ class MainWin(QMainWindow):
         self._setup_properties()     # creates self._prop_panel, self._props_dock
         self._setup_register_view()  # Register View (tabified with Properties)
         self._setup_run_status()     # Run Status Panel (tabified with Register View)
+        self._setup_port_detail()    # Port Detail Panel (tabified with Run Status)
         self._canvas.selection_changed.connect(self._on_canvas_selection)
         self._canvas.tab_open_requested.connect(self._on_open_tab)
         self._canvas.wire_selected.connect(self._on_wire_selected)
         self._canvas.wire_selection_cleared.connect(self._on_wire_selection_cleared)
+        self._canvas.connections_changed.connect(self._update_port_detail)
         self._canvas.set_source_requested.connect(self._on_source_set)
         self._canvas.write_program_requested.connect(self.write_program)
         self._setup_menu()           # creates self._a_new/_a_open/_a_save/etc.
         self._setup_toolbar()        # reuses those actions
         self._update_register_view() # populate with initial CPU state
         self._update_run_status()    # populate Run Status Panel with initial state
+        self._update_port_detail()   # populate Port Detail Panel with initial state
         self._arrange_initial_layout()  # lead with Log / Properties (Canvas主役)
 
     # ------------------------------------------------------------------ layout
@@ -426,9 +430,11 @@ class MainWin(QMainWindow):
 
     def _on_wire_selected(self, conn: dict):
         self._prop_panel.show_wire(conn)
+        self._update_port_detail()   # PATCH_PORT_DETAIL_V07
 
     def _on_wire_selection_cleared(self):
         self._prop_panel.show_none()
+        self._update_port_detail()   # PATCH_PORT_DETAIL_V07
 
     def _on_wire_color_changed(self, conn_id: str, color: str):
         if self._canvas.set_connection_style(conn_id, color=color) and self._project_root is not None:
@@ -568,6 +574,31 @@ class MainWin(QMainWindow):
         self.addDockWidget(Qt.RightDockWidgetArea, self._run_status)
         self.tabifyDockWidget(self._reg_view_dock, self._run_status)
 
+    def _setup_port_detail(self):
+        """Port Detail Panel — read-only ports/connections view (PATCH_PORT_DETAIL_V07)."""
+        self._port_detail = PortDetailPanel(self)
+        self.addDockWidget(Qt.RightDockWidgetArea, self._port_detail)
+        self.tabifyDockWidget(self._run_status, self._port_detail)
+
+    # ----------------------------------------- port detail (PATCH_PORT_DETAIL_V07)
+
+    def _collect_port_detail(self) -> dict:
+        """Build a Port Detail info dict for the current selection (wire > node > none)."""
+        try:
+            conn_id = self._canvas.selected_conn_id()
+            if conn_id is not None:
+                return build_wire_info(self._canvas, conn_id)
+            node_id = self._canvas.selected_node_id()
+            if node_id is not None:
+                return build_node_info(self._canvas, node_id)
+        except Exception:
+            return {"selection": "none"}
+        return {"selection": "none"}
+
+    def _update_port_detail(self) -> None:
+        """Refresh the Port Detail Panel from the current selection."""
+        self._port_detail.update_detail(self._collect_port_detail())
+
     # ------------------------------------------- run status (PATCH_RUN_STATUS_PANEL_V07)
 
     def _collect_run_status(self) -> dict:
@@ -633,6 +664,7 @@ class MainWin(QMainWindow):
         self._run_status.update_status(self._collect_run_status())
 
     def _on_canvas_selection(self, nodes: list):
+        self._update_port_detail()   # PATCH_PORT_DETAIL_V07: reflect new selection
         if not nodes:
             # Keep the Wire view if a wire is selected (node selection was cleared
             # so the wire could take over Properties — PATCH_WIRE_STYLE_V05).
@@ -1278,6 +1310,7 @@ class MainWin(QMainWindow):
         ])
         self._ribbon.add_page("Debug", [           # I: Log and Console separated
             self._run_status.toggleViewAction(),
+            self._port_detail.toggleViewAction(),
             self._reg_view_dock.toggleViewAction(),
             self._mem_viewer.toggleViewAction(),
             self._bus_trace_dock.toggleViewAction(),

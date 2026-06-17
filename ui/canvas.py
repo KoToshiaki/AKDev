@@ -550,6 +550,7 @@ class Canvas(QGraphicsView):
     mode_changed       = Signal(str)              # "wire" | "design"
     wire_selected         = Signal(dict)          # connection dict (PATCH_WIRE_STYLE_V05)
     wire_selection_cleared = Signal()             # no wire selected
+    connections_changed   = Signal()              # add/remove connection (PATCH_PORT_DETAIL_V07)
     set_source_requested  = Signal(str, str)      # (node_id, source_type) PATCH_PART_PROGRAM_ASSIGN_V05
     write_program_requested = Signal(str)         # (node_id) PATCH_CIRCUIT_WRITE_RUN_HELLO_V05
 
@@ -1104,6 +1105,7 @@ class Canvas(QGraphicsView):
         self._prune_orphan_visual_ports()
         self.update_connections()
         self._log(f"Removed wire [{conn_id}]")
+        self.connections_changed.emit()
         return True
 
     def _update_hover(self, scene_pos: QPointF) -> None:
@@ -1410,6 +1412,17 @@ class Canvas(QGraphicsView):
         node = self.get_node(node_id)
         return dict(node.sources()) if node is not None else {}
 
+    def node_connections(self, node_id: str) -> list:
+        """Return connections that touch *node_id* (read-only, PATCH_PORT_DETAIL_V07)."""
+        return [c for c in self._connections
+                if c.get("from", {}).get("node_id") == node_id
+                or c.get("to", {}).get("node_id") == node_id]
+
+    def part_logical_ports(self, node_id: str) -> list:
+        """Return the part.json logical ports for a node (empty if node missing)."""
+        node = self.get_node(node_id)
+        return list(node.part().get("ports", []) or []) if node is not None else []
+
     def node_source(self, node_id: str, source_type: str) -> "str | None":
         """Return the resolved path string for one source type, or None."""
         node = self.get_node(node_id)
@@ -1566,6 +1579,7 @@ class Canvas(QGraphicsView):
         self._conn_items[conn["id"]] = self._make_conn_item(conn)
         self.update_connections()
         self._log(f"Connected: {from_node_id}:{from_port} → {to_node_id}:{to_port}")
+        self.connections_changed.emit()
         return conn
 
     def export_canvas(self) -> dict:
