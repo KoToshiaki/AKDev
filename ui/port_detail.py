@@ -55,11 +55,17 @@ def build_node_info(canvas, node_id: str) -> dict:
     logical = []
     for p in part.get("ports", []) or []:
         t = p.get("type", "")
+        # PATCH_PORT_SCHEMA_V08: prefer explicit v2 fields; fall back to type-based
+        # inference for legacy (v1) ports that lack them.
+        direction = p.get("direction") or direction_from_type(t)
+        width = p.get("width")
         logical.append({
             "name":      p.get("name", "?"),
             "type":      t or "-",
-            "direction": direction_from_type(t),
-            "width":     p.get("width", "-"),
+            "role":      p.get("role"),
+            "direction": direction,
+            "width":     width if width is not None else "-",
+            "description": p.get("description", ""),
         })
 
     visual = []
@@ -156,9 +162,11 @@ def _render_node(info: dict) -> list[str]:
     lp = info.get("logical_ports") or []
     if lp:
         for p in lp:
+            role = f" role={p.get('role')}" if p.get("role") else ""
+            desc = f"  — {p.get('description')}" if p.get("description") else ""
             lines.append(
-                f"  {p.get('name')}: kind={p.get('type')} "
-                f"dir={p.get('direction')} width={p.get('width')}"
+                f"  {p.get('name')}: kind={p.get('type')}{role} "
+                f"dir={p.get('direction')} width={p.get('width')}{desc}"
             )
     else:
         lines.append("  (none)")

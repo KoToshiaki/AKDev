@@ -5,6 +5,8 @@ import json
 import pathlib
 from collections import defaultdict
 
+from core.ports import normalize_part
+
 _REQUIRED = {"id", "name", "category", "ports"}
 
 _PARTS_DIR = pathlib.Path(__file__).parent.parent / "parts"
@@ -36,7 +38,10 @@ def load_parts():
             missing = _REQUIRED - data.keys()
             if missing:
                 raise ValueError(f"missing keys: {', '.join(sorted(missing))}")
-            cats[data["category"]].append(data)
+            # PATCH_PORT_SCHEMA_V08: normalize ports to v2 (explicit role/direction/
+            # width/required/description) so all consumers see one schema. Legacy
+            # (v1) parts are upgraded; v2 parts keep their explicit values.
+            cats[data["category"]].append(normalize_part(data))
         except Exception as exc:
             errors.append(f"[lib] {path.relative_to(_PARTS_DIR)}: {exc}")
     ordered = {k: cats[k] for k in _CAT_ORDER if k in cats}

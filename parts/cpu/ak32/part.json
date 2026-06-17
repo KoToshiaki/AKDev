@@ -3,11 +3,12 @@
   "name": "AK32 CPU",
   "category": "cpu",
   "description": "Custom 32-bit RISC CPU core",
+  "schema_version": 2,
   "ports": [
-    {"name": "bus",   "type": "bus.master"},
-    {"name": "clk",   "type": "clock"},
-    {"name": "reset", "type": "reset"},
-    {"name": "irq",   "type": "irq"}
+    {"name": "bus",   "type": "bus.master", "role": "master", "direction": "inout", "width": 32, "required": true,  "description": "AK32 main memory/IO bus (master)"},
+    {"name": "clk",   "type": "clock",       "role": null,     "direction": "in",    "width": 1,  "required": true,  "description": "Clock input"},
+    {"name": "reset", "type": "reset",       "role": null,     "direction": "in",    "width": 1,  "required": true,  "description": "Reset input"},
+    {"name": "irq",   "type": "irq",         "role": null,     "direction": "in",    "width": 1,  "required": false, "description": "Interrupt request input (CPU consumes)"}
   ],
   "editable": [
     {"name": "program", "type": "asm"}

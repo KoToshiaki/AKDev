@@ -3,10 +3,11 @@
   "name": "GPIO",
   "category": "io",
   "description": "General purpose I/O controller",
+  "schema_version": 2,
   "ports": [
-    {"name": "bus",   "type": "bus.slave"},
-    {"name": "gpio",  "type": "gpio"},
-    {"name": "clk",   "type": "clock"},
-    {"name": "reset", "type": "reset"}
+    {"name": "bus",   "type": "bus.slave", "role": "slave", "direction": "inout", "width": 32, "required": true,  "description": "Register bus (slave)"},
+    {"name": "gpio",  "type": "gpio",      "role": null,    "direction": "inout", "width": 1,  "required": false, "description": "General purpose I/O line"},
+    {"name": "clk",   "type": "clock",     "role": null,    "direction": "in",    "width": 1,  "required": true,  "description": "Clock input"},
+    {"name": "reset", "type": "reset",     "role": null,    "direction": "in",    "width": 1,  "required": true,  "description": "Reset input"}
   ]
 }

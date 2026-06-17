@@ -29,8 +29,13 @@ v0.8 は、この実行基盤の上で **接続の妥当性検証** と **デバ
 
 ## v0.8 作業候補（未確定・優先順位は今後決定）
 
+> **最初の候補として `PATCH_PORT_SCHEMA_V08` を検討中。** Port direction/width validation（候補 A）の前に、
+> part.json の ports schema 正規化（direction/width/role/schema_version の明示）を 1 パッチ挟む方針。
+> 設計資料: `PATCH_PORT_SCHEMA_V08_ROADMAP.md` / `PATCH_PORT_SCHEMA_V08_CHECKLIST.md`（実装は未着手）。
+
 ### A. Port direction / width validation
 - part.json の `ports` に direction / width を明示し、接続時に整合を検証。
+- 前段として ports schema 正規化（`PATCH_PORT_SCHEMA_V08`）を先に行う。
 - Port Detail Panel（v0.7）で direction/width を確認できる土台は完成済み。
 - master↔slave / out↔in / width 一致などの接続可否ルール。
 

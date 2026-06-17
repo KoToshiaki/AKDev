@@ -3,10 +3,11 @@
   "name": "Timer",
   "category": "io",
   "description": "Programmable timer with IRQ",
+  "schema_version": 2,
   "ports": [
-    {"name": "bus",   "type": "bus.slave"},
-    {"name": "clk",   "type": "clock"},
-    {"name": "reset", "type": "reset"},
-    {"name": "irq",   "type": "irq"}
+    {"name": "bus",   "type": "bus.slave", "role": "slave", "direction": "inout", "width": 32, "required": true,  "description": "Register bus (slave)"},
+    {"name": "clk",   "type": "clock",     "role": null,    "direction": "in",    "width": 1,  "required": true,  "description": "Clock input"},
+    {"name": "reset", "type": "reset",     "role": null,    "direction": "in",    "width": 1,  "required": true,  "description": "Reset input"},
+    {"name": "irq",   "type": "irq",       "role": null,    "direction": "out",   "width": 1,  "required": false, "description": "Timer interrupt output"}
   ]
 }

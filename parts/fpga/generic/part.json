@@ -3,9 +3,10 @@
   "name": "Generic FPGA",
   "category": "fpga",
   "description": "Generic FPGA placeholder",
+  "schema_version": 2,
   "ports": [
-    {"name": "bus",   "type": "bus.slave"},
-    {"name": "clk",   "type": "clock"},
-    {"name": "reset", "type": "reset"}
+    {"name": "bus",   "type": "bus.slave", "role": "slave", "direction": "inout", "width": 32, "required": true, "description": "System bus (slave)"},
+    {"name": "clk",   "type": "clock",     "role": null,    "direction": "in",    "width": 1,  "required": true, "description": "Clock input"},
+    {"name": "reset", "type": "reset",     "role": null,    "direction": "in",    "width": 1,  "required": true, "description": "Reset input"}
   ]
 }

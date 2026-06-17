@@ -3,11 +3,12 @@
   "name": "Lattice ECP5-85F",
   "category": "fpga",
   "description": "84K LUT class FPGA",
+  "schema_version": 2,
   "ports": [
-    {"name": "bus",   "type": "bus.slave"},
-    {"name": "jtag",  "type": "debug.jtag"},
-    {"name": "clk",   "type": "clock"},
-    {"name": "reset", "type": "reset"}
+    {"name": "bus",   "type": "bus.slave",  "role": "slave", "direction": "inout", "width": 32,   "required": true,  "description": "System bus (slave)"},
+    {"name": "jtag",  "type": "debug.jtag", "role": null,    "direction": "inout", "width": null, "required": false, "description": "JTAG debug interface"},
+    {"name": "clk",   "type": "clock",      "role": null,    "direction": "in",    "width": 1,    "required": true,  "description": "Clock input"},
+    {"name": "reset", "type": "reset",      "role": null,    "direction": "in",    "width": 1,    "required": true,  "description": "Reset input"}
   ],
   "resources": {
     "lut": 84000,

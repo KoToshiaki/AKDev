@@ -15,11 +15,18 @@
 * [x] 前フェーズ資料を `old/` へ整理した（2026-06-17）
   - `git mv` で `ROADMAP6.md` / `CHECKLIST6.md` / `ROADMAP7.md` / `CHECKLIST7.md` を `old/` へ収納
   - root の現行管理ファイルは `ROADMAP8.md` / `CHECKLIST8.md` のみ（v0.6 / v0.7 は完了済み履歴）
+* [x] v0.8 最初の候補として `PATCH_PORT_SCHEMA_V08` の設計資料を作成した（2026-06-17）
+  - `PATCH_PORT_SCHEMA_V08_ROADMAP.md` / `PATCH_PORT_SCHEMA_V08_CHECKLIST.md`
+* [x] `PATCH_PORT_SCHEMA_V08` 実装完了（2026-06-17）
+  - `core/ports.py` 追加 / `parts/**/part.json` 11 種を v2 へ migration / `ui/lib.py` 正規化 / `ui/port_detail.py` 明示値優先表示
+  - `python -m pytest tests/` → **878 passed**（860 + 新規 18）
+  - 次候補: `PATCH_PORT_DIRECTION_WIDTH_VALIDATION_V08`（接続時 direction/width 検証）
 * [ ] v0.8 テーマを確定する（候補: Device Expansion & Connection Validation）
   - 完了条件: ユーザーがテーマと最初のパッチを決定する
-* [ ] 最初のパッチの実装範囲をユーザーが承認する
+* [ ] 最初のパッチ（`PATCH_PORT_SCHEMA_V08` 想定）の実装範囲をユーザーが承認する
   - 完了条件: ユーザーから実装開始の明示的な指示がある
 * [ ] 最初のパッチの `PATCH_*_V08_ROADMAP.md` / `..._CHECKLIST.md` を作業前に作成する
+  - `PATCH_PORT_SCHEMA_V08` は設計資料作成済み（実装着手は承認後）
 
 ---
 

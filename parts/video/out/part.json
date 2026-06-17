@@ -3,9 +3,10 @@
   "name": "Video Out",
   "category": "video",
   "description": "Digital video output controller",
+  "schema_version": 2,
   "ports": [
-    {"name": "video", "type": "video.rgb"},
-    {"name": "clk",   "type": "clock"},
-    {"name": "reset", "type": "reset"}
+    {"name": "video", "type": "video.rgb", "role": null, "direction": "out", "width": 24, "required": true, "description": "Digital RGB video output"},
+    {"name": "clk",   "type": "clock",     "role": null, "direction": "in",  "width": 1,  "required": true, "description": "Clock input"},
+    {"name": "reset", "type": "reset",     "role": null, "direction": "in",  "width": 1,  "required": true, "description": "Reset input"}
   ]
 }
