@@ -98,6 +98,7 @@ _KIND_BY_PART_ID = {
     "mem.ram":       "ram",
     "mem.vram":      "vram",
     "io.uart":       "uart",
+    "io.input":      "input",
     "io.gpio":       "gpio",
     "io.timer":      "timer",
     "video.regs":    "video_regs",
@@ -114,6 +115,7 @@ _ROLE_BY_KIND = {
     "vram":       "memory",
     "rom":        "memory",
     "uart":       "mmio",
+    "input":      "mmio",
     "gpio":       "mmio",
     "timer":      "mmio",
     "video_regs": "mmio",
@@ -123,14 +125,16 @@ _ROLE_BY_KIND = {
     "unsupported": "none",
 }
 
-# kinds that have a runtime Part *today* (behaviour-preserving scope of this patch).
-_RUNTIME_BACKED = {"cpu", "ram", "uart"}
+# kinds that have a runtime Part *today* (behaviour-preserving scope per patch).
+_RUNTIME_BACKED = {"cpu", "ram", "uart", "input"}
 
 # stable runtime ids (must not change — bus tracing / signal overlay / tests).
-_RUNTIME_ID = {"cpu": "sim_cpu", "ram": "sim_ram", "uart": "sim_uart"}
+_RUNTIME_ID = {"cpu": "sim_cpu", "ram": "sim_ram", "uart": "sim_uart",
+               "input": "sim_input"}
 
 _LABEL_BY_KIND = {
     "cpu": "CPU", "ram": "RAM", "vram": "VRAM", "rom": "ROM", "uart": "UART",
+    "input": "INPUT",
     "gpio": "GPIO", "timer": "TIMER", "video_regs": "VIDEO", "video_out": "VIDEO",
     "bridge": "BRIDGE", "fpga": "FPGA", "unsupported": "DEVICE",
 }
@@ -249,19 +253,23 @@ MULTI_RAM_UNSUPPORTED = "MULTI_RAM_UNSUPPORTED"
 
 
 def assign_mmio_bases(specs: list, *, layout: "MemoryLayout | None" = None) -> list:
-    """Auto-place MMIO windows (UART etc.) for an Address Map. Returns new specs.
+    """Auto-place MMIO windows (UART / Input / …) for an Address Map. Returns new specs.
 
-    The **first** MMIO device keeps the canonical UART window
-    (``layout.mmio_base``, ``layout.mmio_size``) and stays runtime-backed
-    (``runtime_id`` ``sim_uart``). Subsequent MMIO devices are placed at
-    ``mmio_base + n*mmio_stride`` (default 0x0110, 0x0120 …); they are Address-Map
-    placed / diagnosed only and are **not** runtime-backed in this patch (so a
-    single UART is unchanged). Memory / CPU specs are returned unchanged. Default
-    layout (circuit_compat) reproduces the current 0x0100 / 0x0110 placement.
+    MMIO windows are placed by a single running index ``n`` at
+    ``mmio_base + n*mmio_stride`` (default 0x0100, 0x0110, 0x0120 …), so e.g. a UART
+    + an Input land at 0x0100 / 0x0110.
+
+    Runtime-backing is decided **per kind** (PATCH_INPUT_DEVICE_V08): the *first*
+    device of each kind keeps its canonical ``runtime_id`` (sim_uart / sim_input …)
+    and stays runtime-backed; the 2nd+ device of the *same* kind is Address-Map
+    placed / diagnosed only (``runtime_backed=False``, ``runtime_id=None``). So
+    UART + Input are both runtime-backed, while UART2 / Input2 are placement-only —
+    a single UART (or single of any kind) is unchanged. Memory / CPU specs pass through.
     """
     layout = layout or get_memory_layout()
     out: list = []
     n = 0
+    seen_kinds: set = set()
     for s in specs:
         s = dict(s)
         if s.get("addressable") and s.get("role") == "mmio":
@@ -270,11 +278,13 @@ def assign_mmio_bases(specs: list, *, layout: "MemoryLayout | None" = None) -> l
             s["size"] = layout.mmio_size
             s["end"]  = base + layout.mmio_size - 1
             s["attach_ranges"] = [(base, s["end"])]
-            if n > 0:
-                # extra MMIO windows are placed/diagnosed only (no runtime Part yet)
+            kind = s.get("kind")
+            if kind in seen_kinds:
+                # 2nd+ device of this kind: placed/diagnosed only (no runtime Part)
                 s["runtime_backed"] = False
                 s["runtime_id"]     = None
                 s["device_id"]      = f"mmio_{s.get('node_id') or n}"
+            seen_kinds.add(kind)
             n += 1
         out.append(s)
     return out

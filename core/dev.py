@@ -122,3 +122,67 @@ class UartPart(Part):
     def clear(self) -> None:
         """Discard accumulated TX output."""
         self._buf.clear()
+
+
+# ---------------------------------------------------------------------------
+# InputPart — memory-mapped button/key input (PATCH_INPUT_DEVICE_V08)
+# ---------------------------------------------------------------------------
+
+class InputPart(Part):
+    """Minimal MMIO input device — readable with the existing ``LD`` instruction.
+
+    Register map (relative to base):
+      +0  KEY_STATE  read: currently-held key bitmask / write: no-op
+      +4  EDGE_STATE read: keys pressed since last clear / write: CLEAR_EDGE (clears)
+
+    Key bits: 0 up, 1 down, 2 left, 3 right, 4 A, 5 B, 6 Start, 7 Select.
+    No ``IN`` instruction is needed: the CPU reads ``bus.read(base)`` via ``LD``.
+    Input state is driven from the UI / tests via ``set_keys``.
+    """
+
+    OFFSET_KEY  = 0
+    OFFSET_EDGE = 4
+    _KEY_MASK   = 0xFF
+
+    def __init__(self, part_id: str, name: str, base: int = 0, size: int = 8):
+        super().__init__(part_id, name)
+        self.base = base
+        self.size = size
+        self._keys: int = 0   # current held key bitmask
+        self._edge: int = 0   # rising-edge bitmask since last clear
+
+    # ---- Part interface ----
+
+    def reset(self) -> None:
+        self._keys = 0
+        self._edge = 0
+
+    def read(self, addr: int) -> int:
+        off = addr - self.base
+        if off == self.OFFSET_KEY:
+            return self._keys
+        if off == self.OFFSET_EDGE:
+            return self._edge
+        return 0
+
+    def write(self, addr: int, value: int) -> None:
+        off = addr - self.base
+        if off == self.OFFSET_EDGE:     # CLEAR_EDGE
+            self._edge = 0
+        # other offsets: no-op (KEY_STATE is read-only)
+
+    # ---- input-specific helpers ----
+
+    def set_keys(self, mask: int) -> None:
+        """Set the held-key bitmask; rising edges accumulate into EDGE_STATE."""
+        mask &= self._KEY_MASK
+        self._edge |= mask & ~self._keys   # newly-pressed bits
+        self._keys = mask
+
+    def get_keys(self) -> int:
+        """Return the current held-key bitmask."""
+        return self._keys
+
+    def clear_edge(self) -> None:
+        """Clear the rising-edge bitmask."""
+        self._edge = 0

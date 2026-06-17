@@ -24,7 +24,7 @@ from core.devices import (
     get_memory_layout, apply_address_overrides,
 )
 from core.cpu import AK32Part
-from core.dev import RamPart, UartPart
+from core.dev import RamPart, UartPart, InputPart
 from core.project import create_project, load_project, load_target, save_system
 from core.runtime import VirtualCircuitRuntime
 from core.sim import Bus
@@ -206,11 +206,14 @@ class MainWin(QMainWindow):
         if not circuit:
             return mode, layout, assign_mmio_bases(legacy_device_specs(layout), layout=layout)
         # PATCH_MULTI_RAM_UART_ADDRESS_MAP_V08: spec ALL resolved RAM/UART nodes (not
-        # just the first), then auto-place MMIO windows (UART1=0x0100, UART2=0x0110…).
+        # just the first); PATCH_INPUT_DEVICE_V08: Input nodes too. assign_mmio_bases
+        # then auto-places MMIO windows in encounter order (UART=0x0100, Input=0x0110…).
         specs = [make_device_spec(plan["cpu"], self._part_of(plan["cpu"]), layout=layout)]
         for node_id in plan["rams"]:
             specs.append(make_device_spec(node_id, self._part_of(node_id), layout=layout))
         for node_id in plan["uarts"]:
+            specs.append(make_device_spec(node_id, self._part_of(node_id), layout=layout))
+        for node_id in plan.get("inputs", []):
             specs.append(make_device_spec(node_id, self._part_of(node_id), layout=layout))
         return mode, layout, assign_mmio_bases(specs, layout=layout)
 
@@ -231,17 +234,18 @@ class MainWin(QMainWindow):
     def _build_runtime_devices(self, plan, mode, layout, specs):
         """Instantiate runtime Parts from device specs and bind the runtime.
 
-        Only ``runtime_backed`` kinds (cpu/ram/uart) are instantiated, and only the
-        FIRST of each kind — their ``runtime_id`` (sim_cpu/sim_ram/sim_uart) is kept
-        stable for bus tracing, the signal overlay and the runtime's UART detection.
-        A ``vram`` / extra-UART / extra-RAM spec is classified + (for UART) placed on
-        the Address Map, but NOT turned into a runtime Part this patch
-        (PATCH_MULTI_RAM_UART_ADDRESS_MAP_V08; full multi-device runtime is later).
-        The CPU reset PC comes from the layout (PATCH_CODE_REGION_MMIO_RELOCATION_V08;
-        default 0x0000).
+        Only ``runtime_backed`` kinds (cpu/ram/uart/input) are instantiated, and only
+        the FIRST of each kind — their ``runtime_id`` (sim_cpu/sim_ram/sim_uart/
+        sim_input) is kept stable for bus tracing, the signal overlay and the
+        runtime's UART detection. A ``vram`` / extra-UART / extra-Input / extra-RAM
+        spec is classified + (for MMIO) placed on the Address Map, but NOT turned
+        into a runtime Part (full multi-device runtime is later). The CPU reset PC
+        comes from the layout (PATCH_CODE_REGION_MMIO_RELOCATION_V08; default 0x0000).
         """
         self._sim_ram = self._sim_uart = self._sim_cpu = None
+        self._sim_input = None
         self._sim_ram_node = self._sim_uart_node = self._sim_cpu_node = None
+        self._sim_input_node = None
         for spec in specs:
             if not spec.get("runtime_backed"):
                 continue
@@ -253,14 +257,17 @@ class MainWin(QMainWindow):
             elif kind == "uart" and self._sim_uart is None:
                 self._sim_uart = UartPart("sim_uart", "UART", base=spec["base"])
                 self._sim_uart_node = spec["node_id"]
+            elif kind == "input" and self._sim_input is None:
+                self._sim_input = InputPart("sim_input", "INPUT", base=spec["base"])
+                self._sim_input_node = spec["node_id"]
             elif kind == "cpu" and self._sim_cpu is None:
                 self._sim_cpu = AK32Part("sim_cpu", "AK32", self._sim_bus,
                                          reset_pc=layout.reset_pc)
                 self._sim_cpu_node = spec["node_id"]
 
         # Address Map from the addressable specs: the first RAM (memory container) +
-        # all MMIO windows (UARTs). 2nd+ RAM is NOT placed (16-bit space; warned via
-        # multi_device_warnings). The map carves the RAM around every MMIO window.
+        # all MMIO windows (UART/Input). 2nd+ RAM is NOT placed (16-bit space; warned
+        # via multi_device_warnings). The map carves the RAM around every MMIO window.
         addr_specs, seen_ram = [], False
         for s in specs:
             if not s.get("addressable"):
@@ -277,6 +284,8 @@ class MainWin(QMainWindow):
             parts_by_id["sim_ram"] = self._sim_ram
         if self._sim_uart is not None:
             parts_by_id["sim_uart"] = self._sim_uart
+        if self._sim_input is not None:
+            parts_by_id["sim_input"] = self._sim_input
         for dev in amap["devices"]:
             part = parts_by_id.get(dev.get("device_id"))
             if part is None:
@@ -298,6 +307,16 @@ class MainWin(QMainWindow):
     def address_map(self) -> "dict | None":
         """Return the current Address Map (device layout on the bus)."""
         return self._runtime.address_map
+
+    def set_input_keys(self, mask: int) -> None:
+        """Set the runtime Input device's held-key bitmask (PATCH_INPUT_DEVICE_V08).
+
+        No-op when no Input device is on the canvas. The CPU reads the keys with the
+        existing ``LD`` instruction (Input is MMIO-mapped); no ``IN`` instruction.
+        """
+        if self._sim_input is not None:
+            self._sim_input.set_keys(mask)
+            self._refresh_run_panels()
 
     # ----------------------------------------- circuit resolve (PATCH_VIRTUAL_CIRCUIT_RUNTIME_V05)
 

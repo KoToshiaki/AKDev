@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from core.devices import (
     device_kind, get_memory_layout, apply_address_overrides, multi_device_warnings,
+    is_addressable_kind,
 )
 
 
@@ -37,6 +38,10 @@ def _is_ram(node: dict) -> bool:
 
 def _is_uart(node: dict) -> bool:
     return _node_kind(node) == "uart"
+
+
+def _is_input(node: dict) -> bool:
+    return _node_kind(node) == "input"
 
 
 def resolve_circuit(nodes: list[dict], connections: list[dict],
@@ -89,7 +94,8 @@ def resolve_circuit(nodes: list[dict], connections: list[dict],
         return {
             "ok": False, "issues": ["no CPU part on canvas"],
             "cpu": None, "target_cpu": None,
-            "rams": [], "uarts": [], "cpu_present": False,
+            "rams": [], "uarts": [], "inputs": [], "devices": [],
+            "cpu_present": False,
         }
 
     # Pick the target CPU. A single CPU is always the target (selection-free); with
@@ -103,7 +109,8 @@ def resolve_circuit(nodes: list[dict], connections: list[dict],
             "ok": False,
             "issues": [f"multiple CPU parts ({len(cpus)}). Select one CPU to run."],
             "cpu": None, "target_cpu": None,
-            "rams": [], "uarts": [], "cpu_present": True,
+            "rams": [], "uarts": [], "inputs": [], "devices": [],
+            "cpu_present": True,
         }
 
     # Only the target CPU's connectivity matters — an unconnected non-target CPU
@@ -112,6 +119,16 @@ def resolve_circuit(nodes: list[dict], connections: list[dict],
     # regardless of canvas scene ordering.
     conn_rams  = sorted(r["node_id"] for r in rams  if wired(target, r["node_id"]))
     conn_uarts = sorted(u["node_id"] for u in uarts if wired(target, u["node_id"]))
+    conn_inputs = sorted(n["node_id"] for n in nodes
+                         if _is_input(n) and wired(target, n["node_id"]))
+    # All addressable (memory/mmio) devices wired to the target CPU, for future
+    # device kinds (PATCH_INPUT_DEVICE_V08). Existing rams/uarts keys are unchanged.
+    conn_devices = sorted(
+        ({"node_id": n["node_id"], "kind": _node_kind(n)}
+         for n in nodes
+         if is_addressable_kind(_node_kind(n)) and wired(target, n["node_id"])),
+        key=lambda d: d["node_id"],
+    )
 
     issues: list[str] = []
     if not rams:
@@ -131,6 +148,8 @@ def resolve_circuit(nodes: list[dict], connections: list[dict],
         "target_cpu": target,
         "rams": conn_rams,
         "uarts": conn_uarts,
+        "inputs": conn_inputs,
+        "devices": conn_devices,
         "cpu_present": cpu_present,
     }
 

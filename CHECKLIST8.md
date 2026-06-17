@@ -62,7 +62,12 @@
   - `python -m pytest tests/` → **1011 passed**（988 + 新規 23）
   - 次候補: `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08` または `PATCH_AK32_INSTRUCTION_EXPANSION_V08`
 * [x] 分割先行候補 `PATCH_INPUT_DEVICE_V08` の設計資料を作成した（2026-06-18）
-  - `PATCH_INPUT_DEVICE_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・Input 単独（MMIO・`sim_input`・`LD` で読む・`IN` 命令不要）・Input 非配置は現行互換・`assign_mmio_bases` を kind 単位 runtime-backing へ調整する点が要**
+  - `PATCH_INPUT_DEVICE_V08_ROADMAP.md` / `..._CHECKLIST.md`
+* [x] `PATCH_INPUT_DEVICE_V08` 実装完了（2026-06-18・**Input 非配置は現行互換**）
+  - `parts/io/input/part.json` 追加 / `core/devices.py`（input kind/role/runtime・`assign_mmio_bases` を kind 単位 backing）/ `core/dev.py` `InputPart` / `core/circuit.py` `resolve_circuit` に `inputs`/`devices` / `ui/win.py` Input runtime + `set_input_keys`
+  - CPU は既存 `LD` で Input を読む（`IN` 命令不要）。UART+Input で UART 0x0100 / Input 0x0110・両 backed
+  - `python -m pytest tests/` → **1034 passed**（1011 + 新規 23）
+  - 次候補: `PATCH_ROM_DEVICE_V08` または `PATCH_AK32_INSTRUCTION_EXPANSION_V08`
 * [x] 次候補 `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08` の設計資料を作成した（2026-06-18）
   - `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・ROM/Input 優先（Input は LD で読め IN 命令不要）・VRAM/Storage は後続・新 device 無しは現行互換・分割案（INPUT 先行 → ROM）あり**
 * [ ] v0.8 テーマを確定する（候補: Device Expansion & Connection Validation）

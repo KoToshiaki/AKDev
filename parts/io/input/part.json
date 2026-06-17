@@ -1,0 +1,12 @@
+{
+  "id": "io.input",
+  "name": "Input",
+  "category": "io",
+  "schema_version": 2,
+  "ports": [
+    {"name": "bus",   "type": "bus.slave", "role": "slave", "direction": "inout", "width": 32, "required": true,  "description": "Register bus (slave)"},
+    {"name": "keys",  "type": "input",     "role": null,    "direction": "in",    "width": 8,  "required": false, "description": "Button/key input lines"},
+    {"name": "clk",   "type": "clock",     "role": null,    "direction": "in",    "width": 1,  "required": true,  "description": "Clock input"},
+    {"name": "reset", "type": "reset",     "role": null,    "direction": "in",    "width": 1,  "required": true,  "description": "Reset input"}
+  ]
+}
