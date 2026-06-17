@@ -233,7 +233,10 @@ class MainWin(QMainWindow):
             {"from_node": c["from"]["node_id"], "to_node": c["to"]["node_id"]}
             for c in self._canvas.export_canvas()["connections"]
         ]
-        return resolve_circuit(nodes, conns)
+        # PATCH_TARGET_CPU_SELECTION_V07: the selected node decides which CPU runs
+        # when several CPUs are placed (single CPU ignores the selection).
+        target = self._canvas.selected_node_id()
+        return resolve_circuit(nodes, conns, target_cpu_id=target)
 
     def _circuit_guard(self, action: str) -> "dict | None":
         """Return the plan if execution is allowed, else None (and log the block).
@@ -257,6 +260,8 @@ class MainWin(QMainWindow):
         """
         self._make_sim(plan)
         self._sim_cycle = 0
+        # PATCH_TARGET_CPU_SELECTION_V07: surface which CPU is the execution target.
+        self._log.append(f"Target CPU: {plan.get('target_cpu', plan['cpu'])}")
         self._log.append(
             f"Circuit built: CPU={plan['cpu']} "
             f"RAM={plan['rams']} UART={plan['uarts']}"
@@ -518,6 +523,20 @@ class MainWin(QMainWindow):
         rel = self._canvas.resolve_program_source("asm")
         return self._resolve_source_path(rel)
 
+    def _circuit_asm_source(self, plan: dict) -> "tuple | None":
+        """Return (target_node_id, rel_path) for the target CPU's asm, else None.
+
+        Circuit mode never falls back to another CPU's source
+        (PATCH_TARGET_CPU_SELECTION_V07): only the resolved target CPU's
+        ``sources.asm`` is used, so a multi-CPU canvas can't accidentally run a
+        non-selected CPU's program.
+        """
+        target = plan.get("target_cpu") or plan.get("cpu")
+        rel = self._canvas.node_source(target, "asm")
+        if not rel:
+            return None
+        return (target, rel)
+
     def _setup_register_view(self):
         dock = QDockWidget("Register View", self)
         dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
@@ -712,11 +731,32 @@ class MainWin(QMainWindow):
         plan = self._circuit_guard("Build")
         if plan is None:
             return
+        # PATCH_TARGET_CPU_SELECTION_V07: in circuit mode build the target CPU's
+        # asm only (no fallback to another CPU / selected non-CPU node), so Build
+        # uses the same target as Write/Run/Step.
         if plan["cpu_present"]:
             self._bind_circuit_runtime(plan)
-        # PATCH_PART_PROGRAM_ASSIGN_V05: prefer an asm assigned to a part (priority:
-        # selected node > CPU part > any). Falls back to the editor-tab build when
-        # nothing is assigned, so the existing flow / hello.asm path is unchanged.
+            if root is None:
+                self._log.append("Build: New Project / Open Project を先に行ってください")
+                return
+            resolved = self._circuit_asm_source(plan)
+            if resolved is None:
+                self._log.append("No ASM source assigned to target CPU")
+                return
+            asm_path = self._resolve_source_path(resolved[1])
+            if asm_path is None:
+                return
+            try:
+                text = asm_path.read_text(encoding="utf-8")
+            except OSError as exc:
+                self._log.append(f"Build: cannot read assigned asm: {exc}")
+                return
+            self._log.append(f"Build: using assigned asm {asm_path.as_posix()}")
+            self._assemble_and_load(text, asm_path.name, root)
+            return
+        # Legacy mode (no CPU on canvas): prefer an asm assigned to a part
+        # (PATCH_PART_PROGRAM_ASSIGN_V05; priority selected > CPU > any), else fall
+        # back to the editor-tab build so the existing flow / hello.asm is unchanged.
         if root is not None:
             asm_path = self._resolve_assigned_asm_path()
             if asm_path is not None:
@@ -815,11 +855,17 @@ class MainWin(QMainWindow):
             return False
         if plan["cpu_present"]:
             self._bind_circuit_runtime(plan)
-            prefer_node_id = plan["cpu"]   # write to the resolved CPU's program
-        resolved = self._canvas.resolve_program_node("asm", prefer_node_id)
-        if resolved is None:
-            self._log.append("No ASM source assigned")
-            return False
+            # PATCH_TARGET_CPU_SELECTION_V07: write to the target CPU only — no
+            # fallback to another CPU's source.
+            resolved = self._circuit_asm_source(plan)
+            if resolved is None:
+                self._log.append("No ASM source assigned to target CPU")
+                return False
+        else:
+            resolved = self._canvas.resolve_program_node("asm", prefer_node_id)
+            if resolved is None:
+                self._log.append("No ASM source assigned")
+                return False
         node_id, rel = resolved
         path = self._resolve_source_path(rel)
         if path is None:

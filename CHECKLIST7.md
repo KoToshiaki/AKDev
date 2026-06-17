@@ -90,13 +90,18 @@
 
 # 5. Target CPU Selection（PATCH_TARGET_CPU_SELECTION_V07）
 
-* [ ] `resolve_circuit()` の「cpus[0] 固定」を選択 CPU 優先へ変更する
+* [x] `resolve_circuit()` の「cpus[0] 固定」を選択 CPU 優先へ変更する
   - 完了条件: 選択中 CPU が実行対象になる
-* [ ] 未選択時のデフォルト挙動を整理する
+  - `resolve_circuit(..., target_cpu_id=)` + `target_cpu` キー。単一 CPU は選択非依存
+* [x] 未選択時のデフォルト挙動を整理する
   - 完了条件: 選択がない場合の挙動が定義・テストされている
-* [ ] 「multiple CPU は issue」既存テストとの整合を更新する
-* [ ] テストを追加する（複数 CPU で選択 CPU 実行 / 未選択時挙動）
-* [ ] `pytest tests/` 全通過
+  - 複数 CPU + 未選択 = ambiguous（`multiple CPU parts (N). Select one CPU to run.`）でブロック
+* [x] 「multiple CPU は issue」既存テストとの整合を更新する
+  - 既存テストは `"multiple CPU"` 部分一致のみで不変、新規 18 件で挙動を網羅
+* [x] テストを追加する（複数 CPU で選択 CPU 実行 / 未選択時挙動）
+  - `tests/test_target_cpu_selection_v07.py`（18 件）
+* [x] `pytest tests/` 全通過
+  - 2026-06-17 確認: **829 passed**（7.62s）
 
 ---
 
