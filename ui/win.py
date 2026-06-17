@@ -24,7 +24,7 @@ from core.devices import (
     get_memory_layout, apply_address_overrides,
 )
 from core.cpu import AK32Part
-from core.dev import RamPart, UartPart, InputPart
+from core.dev import RamPart, RomPart, UartPart, InputPart
 from core.project import create_project, load_project, load_target, save_system
 from core.runtime import VirtualCircuitRuntime
 from core.sim import Bus
@@ -215,6 +215,11 @@ class MainWin(QMainWindow):
             specs.append(make_device_spec(node_id, self._part_of(node_id), layout=layout))
         for node_id in plan.get("inputs", []):
             specs.append(make_device_spec(node_id, self._part_of(node_id), layout=layout))
+        # PATCH_ROM_DEVICE_V08: ROM (read-only memory) nodes too. In circuit_compat
+        # the ROM has no auto base (layout.rom_base is None) and is only placed once
+        # an Address Map Editor override gives it a base/size; game16 auto-places it.
+        for node_id in plan.get("roms", []):
+            specs.append(make_device_spec(node_id, self._part_of(node_id), layout=layout))
         return mode, layout, assign_mmio_bases(specs, layout=layout)
 
     def _resolve_device_specs(self, plan: "dict | None"):
@@ -243,9 +248,9 @@ class MainWin(QMainWindow):
         comes from the layout (PATCH_CODE_REGION_MMIO_RELOCATION_V08; default 0x0000).
         """
         self._sim_ram = self._sim_uart = self._sim_cpu = None
-        self._sim_input = None
+        self._sim_input = self._sim_rom = None
         self._sim_ram_node = self._sim_uart_node = self._sim_cpu_node = None
-        self._sim_input_node = None
+        self._sim_input_node = self._sim_rom_node = None
         for spec in specs:
             if not spec.get("runtime_backed"):
                 continue
@@ -254,6 +259,13 @@ class MainWin(QMainWindow):
                 self._sim_ram = RamPart("sim_ram", "RAM",
                                         size=spec["size"], base=spec["base"])
                 self._sim_ram_node = spec["node_id"]
+            elif kind == "rom" and self._sim_rom is None and spec.get("base") is not None:
+                # Read-only memory; built only when it has a base (game16 auto / Editor
+                # override). In circuit_compat with no override, ROM stays unplaced
+                # (PATCH_ROM_DEVICE_V08). Program loading still targets RAM.
+                self._sim_rom = RomPart("sim_rom", "ROM",
+                                        size=spec["size"], base=spec["base"])
+                self._sim_rom_node = spec["node_id"]
             elif kind == "uart" and self._sim_uart is None:
                 self._sim_uart = UartPart("sim_uart", "UART", base=spec["base"])
                 self._sim_uart_node = spec["node_id"]
@@ -268,14 +280,20 @@ class MainWin(QMainWindow):
         # Address Map from the addressable specs: the first RAM (memory container) +
         # all MMIO windows (UART/Input). 2nd+ RAM is NOT placed (16-bit space; warned
         # via multi_device_warnings). The map carves the RAM around every MMIO window.
-        addr_specs, seen_ram = [], False
+        addr_specs, seen_ram, seen_rom = [], False, False
         for s in specs:
             if not s.get("addressable"):
                 continue
+            if s.get("base") is None:
+                continue   # unplaced (e.g. circuit_compat ROM with no override)
             if s["kind"] == "ram":
                 if seen_ram:
                     continue
                 seen_ram = True
+            if s["kind"] == "rom":
+                if seen_rom:
+                    continue
+                seen_rom = True
             addr_specs.append(s)
         amap = build_address_map_from_devices(mode, addr_specs, layout=layout)
 
@@ -286,6 +304,8 @@ class MainWin(QMainWindow):
             parts_by_id["sim_uart"] = self._sim_uart
         if self._sim_input is not None:
             parts_by_id["sim_input"] = self._sim_input
+        if self._sim_rom is not None:
+            parts_by_id["sim_rom"] = self._sim_rom
         for dev in amap["devices"]:
             part = parts_by_id.get(dev.get("device_id"))
             if part is None:

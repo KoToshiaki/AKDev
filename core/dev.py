@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Toshiaki Kou
 # SPDX-License-Identifier: BSD-3-Clause
-"""Concrete simulation devices — RamPart, UartPart."""
+"""Concrete simulation devices — RamPart, RomPart, UartPart, InputPart."""
 from __future__ import annotations
 
 from core.sim import BusError, Part
@@ -66,6 +66,70 @@ class RamPart(Part):
 
     def dump(self) -> bytes:
         """Return the full memory contents as bytes."""
+        return bytes(self._mem)
+
+
+# ---------------------------------------------------------------------------
+# RomPart — read-only 32-bit little-endian word-addressed ROM (PATCH_ROM_DEVICE_V08)
+# ---------------------------------------------------------------------------
+
+class RomPart(Part):
+    """Byte-array backed **read-only** memory.
+
+    Reads behave exactly like :class:`RamPart` (32-bit little-endian words). Writes
+    from the CPU / bus (e.g. a stray ``ST``) are silently ignored — a no-op, never
+    an error — so a program can't corrupt ROM. The image is set out-of-band via
+    :meth:`load_bytes` (IDE / loader / tests) and **survives reset** (unlike RAM,
+    which is zeroed): ROM content is the firmware/program, not runtime state.
+    """
+
+    def __init__(self, part_id: str, name: str, size: int, base: int = 0):
+        super().__init__(part_id, name)
+        if size <= 0:
+            raise ValueError(f"size must be > 0, got {size}")
+        self.size = size
+        self.base = base
+        self._mem = bytearray(size)
+
+    # ---- helpers ----
+
+    def _offset(self, addr: int) -> int:
+        off = addr - self.base
+        if not (0 <= off <= self.size - 4):
+            raise BusError(
+                f"{self.id}: address {addr:#010x} out of range "
+                f"[{self.base:#010x}, {self.base + self.size - 1:#010x}]"
+            )
+        return off
+
+    # ---- Part interface ----
+
+    def reset(self) -> None:
+        # Read-only memory keeps its image across reset (RAM clears, ROM does not).
+        pass
+
+    def read(self, addr: int) -> int:
+        off = self._offset(addr)
+        return int.from_bytes(self._mem[off:off + 4], "little")
+
+    def write(self, addr: int, value: int) -> None:
+        # Read-only: CPU/bus writes are silently ignored (no exception, no change).
+        return None
+
+    # ---- bulk helpers ----
+
+    def load_bytes(self, data: bytes, offset: int = 0) -> None:
+        """Set the ROM image (IDE / loader / tests). Raises if *data* doesn't fit."""
+        end = offset + len(data)
+        if end > self.size:
+            raise ValueError(
+                f"load_bytes: data ({len(data)} B) at offset {offset} "
+                f"exceeds size {self.size}"
+            )
+        self._mem[offset:end] = data
+
+    def dump(self) -> bytes:
+        """Return the full ROM contents as bytes."""
         return bytes(self._mem)
 
 

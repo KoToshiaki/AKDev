@@ -43,6 +43,11 @@ class MemoryLayout:
     code_base: int
     reset_pc: int
     stack_top: "int | None" = None
+    # ROM region (PATCH_ROM_DEVICE_V08). None == this layout has no auto ROM region
+    # (ROM must then be placed via an Address Map Editor override). game16 carves a
+    # dedicated ROM region; circuit_compat / legacy keep RAM-load behaviour (None).
+    rom_base: "int | None" = None
+    rom_size: "int | None" = None
 
 
 # legacy fixed circuit (no CPU on canvas): 256 B RAM + UART @0x0100 (adjacent).
@@ -66,6 +71,7 @@ GAME16 = MemoryLayout(
     name="game16", ram_base=0x8000, ram_size=0x4000,
     mmio_base=0xE000, mmio_stride=0x10, mmio_size=0x08, mmio_inside_ram=False,
     code_base=0x0000, reset_pc=0x0000, stack_top=0xBFFF,
+    rom_base=0x0000, rom_size=0x8000,
 )
 
 _LAYOUTS = {"legacy": LEGACY, "circuit": CIRCUIT_COMPAT,
@@ -97,6 +103,7 @@ _KIND_BY_PART_ID = {
     "cpu.ak32":      "cpu",
     "mem.ram":       "ram",
     "mem.vram":      "vram",
+    "mem.rom":       "rom",
     "io.uart":       "uart",
     "io.input":      "input",
     "io.gpio":       "gpio",
@@ -126,11 +133,11 @@ _ROLE_BY_KIND = {
 }
 
 # kinds that have a runtime Part *today* (behaviour-preserving scope per patch).
-_RUNTIME_BACKED = {"cpu", "ram", "uart", "input"}
+_RUNTIME_BACKED = {"cpu", "ram", "uart", "input", "rom"}
 
 # stable runtime ids (must not change — bus tracing / signal overlay / tests).
 _RUNTIME_ID = {"cpu": "sim_cpu", "ram": "sim_ram", "uart": "sim_uart",
-               "input": "sim_input"}
+               "input": "sim_input", "rom": "sim_rom"}
 
 _LABEL_BY_KIND = {
     "cpu": "CPU", "ram": "RAM", "vram": "VRAM", "rom": "ROM", "uart": "UART",
@@ -178,6 +185,11 @@ def is_runtime_backed_kind(kind: str) -> bool:
 def _base_size(kind: str, layout: MemoryLayout):
     if kind == "ram":
         return layout.ram_base, layout.ram_size
+    if kind == "rom":
+        # ROM auto base/size only when the layout defines a ROM region (game16);
+        # circuit_compat / legacy return (None, None) so ROM needs an Address Map
+        # Editor override to be placed (PATCH_ROM_DEVICE_V08).
+        return layout.rom_base, layout.rom_size
     if kind == "uart":
         return layout.mmio_base, layout.mmio_size
     return None, None

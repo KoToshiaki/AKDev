@@ -70,6 +70,11 @@
   - 次候補: `PATCH_ROM_DEVICE_V08` または `PATCH_AK32_INSTRUCTION_EXPANSION_V08`
 * [x] 次候補 `PATCH_ROM_DEVICE_V08` の設計資料を作成した（2026-06-18）
   - `PATCH_ROM_DEVICE_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・ROM 単独（read-only memory・`sim_rom`）・既定 circuit_compat は RAM ロード維持・ROM 配置は game16 / Editor override・Program loader は RAM のまま（ROM target 化は後続）・ROM 非配置は現行互換**
+* [x] `PATCH_ROM_DEVICE_V08` 実装完了（2026-06-18・**ROM 非配置は現行互換**）
+  - `parts/mem/rom/part.json` 追加 / `core/devices.py`（rom kind/runtime・`MemoryLayout` に `rom_base`/`rom_size`・`_base_size` ROM 分岐・GAME16 0x0000/0x8000）/ `core/dev.py` `RomPart`（read-only・reset 保持・load_bytes/dump）/ `core/circuit.py` `resolve_circuit` に `roms` / `ui/win.py` ROM runtime（`self._sim_rom`・base 有りのみ runtime 化）
+  - read-only（CPU/bus write は no-op）。circuit_compat は base 無し→未配置（Editor override で配置・RAM 縮小要）。game16 は ROM 0x0000 / RAM 0x8000 非重複。**Program loader は RAM ロードのまま**（ROM target 化は後続）
+  - `python -m pytest tests/` → **1059 passed**（1034 + 新規 25）
+  - 次候補: `PATCH_PROGRAM_TARGET_ROM_V08` または `PATCH_AK32_INSTRUCTION_EXPANSION_V08`
 * [x] 次候補 `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08` の設計資料を作成した（2026-06-18）
   - `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・ROM/Input 優先（Input は LD で読め IN 命令不要）・VRAM/Storage は後続・新 device 無しは現行互換・分割案（INPUT 先行 → ROM）あり**
 * [ ] v0.8 テーマを確定する（候補: Device Expansion & Connection Validation）

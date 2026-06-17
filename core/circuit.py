@@ -44,6 +44,10 @@ def _is_input(node: dict) -> bool:
     return _node_kind(node) == "input"
 
 
+def _is_rom(node: dict) -> bool:
+    return _node_kind(node) == "rom"
+
+
 def resolve_circuit(nodes: list[dict], connections: list[dict],
                     target_cpu_id: "str | None" = None) -> dict:
     """Resolve a CircuitPlan from canvas *nodes* and *connections*.
@@ -94,7 +98,7 @@ def resolve_circuit(nodes: list[dict], connections: list[dict],
         return {
             "ok": False, "issues": ["no CPU part on canvas"],
             "cpu": None, "target_cpu": None,
-            "rams": [], "uarts": [], "inputs": [], "devices": [],
+            "rams": [], "uarts": [], "inputs": [], "roms": [], "devices": [],
             "cpu_present": False,
         }
 
@@ -109,7 +113,7 @@ def resolve_circuit(nodes: list[dict], connections: list[dict],
             "ok": False,
             "issues": [f"multiple CPU parts ({len(cpus)}). Select one CPU to run."],
             "cpu": None, "target_cpu": None,
-            "rams": [], "uarts": [], "inputs": [], "devices": [],
+            "rams": [], "uarts": [], "inputs": [], "roms": [], "devices": [],
             "cpu_present": True,
         }
 
@@ -121,6 +125,10 @@ def resolve_circuit(nodes: list[dict], connections: list[dict],
     conn_uarts = sorted(u["node_id"] for u in uarts if wired(target, u["node_id"]))
     conn_inputs = sorted(n["node_id"] for n in nodes
                          if _is_input(n) and wired(target, n["node_id"]))
+    # ROM (memory role, read-only) wired to the target CPU (PATCH_ROM_DEVICE_V08).
+    # A convenience key like rams/uarts/inputs; ROM is also in conn_devices below.
+    conn_roms = sorted(n["node_id"] for n in nodes
+                       if _is_rom(n) and wired(target, n["node_id"]))
     # All addressable (memory/mmio) devices wired to the target CPU, for future
     # device kinds (PATCH_INPUT_DEVICE_V08). Existing rams/uarts keys are unchanged.
     conn_devices = sorted(
@@ -149,6 +157,7 @@ def resolve_circuit(nodes: list[dict], connections: list[dict],
         "rams": conn_rams,
         "uarts": conn_uarts,
         "inputs": conn_inputs,
+        "roms": conn_roms,
         "devices": conn_devices,
         "cpu_present": cpu_present,
     }
