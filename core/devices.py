@@ -280,6 +280,48 @@ def assign_mmio_bases(specs: list, *, layout: "MemoryLayout | None" = None) -> l
     return out
 
 
+def parse_address_int(text) -> int:
+    """Parse an address/size value from UI text (PATCH_ADDRESS_MAP_EDITOR_V08).
+
+    Accepts an int as-is, ``0x``-prefixed hex (``0x0100``), or plain decimal
+    (``256``; leading zeros tolerated). Raises ``ValueError`` on anything else.
+    """
+    if isinstance(text, bool):
+        raise ValueError("invalid address value")
+    if isinstance(text, int):
+        return text
+    t = str(text).strip().lower()
+    if not t:
+        raise ValueError("empty address value")
+    if t.startswith("0x") or t.startswith("-0x"):
+        return int(t, 16)
+    return int(t, 10)
+
+
+def apply_address_overrides(specs: list, overrides: "dict | None") -> list:
+    """Return new specs with manual base/size overrides applied (pure; non-mutating).
+
+    ``overrides`` maps ``node_id`` -> ``{"mode": "auto"|"manual", "base", "size"}``.
+    Only ``mode == "manual"`` entries on **addressable** specs override ``base`` /
+    ``size`` (and recompute ``end`` / ``attach_ranges``). Empty / None -> the specs
+    are returned unchanged (a no-op copy), so the default pipeline is identical.
+    """
+    out: list = []
+    overrides = overrides or {}
+    for s in specs:
+        s = dict(s)
+        ov = overrides.get(s.get("node_id"))
+        if (ov and ov.get("mode") == "manual" and s.get("addressable")
+                and ov.get("base") is not None and ov.get("size") is not None):
+            base, size = ov["base"], ov["size"]
+            s["base"] = base
+            s["size"] = size
+            s["end"]  = base + size - 1
+            s["attach_ranges"] = [(base, base + size - 1)]
+        out.append(s)
+    return out
+
+
 def multi_device_warnings(specs: list) -> list:
     """Warn (issue dicts) about device configurations not fully supported yet.
 

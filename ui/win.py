@@ -17,10 +17,11 @@ from core.circuit import (
     build_address_map_from_devices,
     validate_address_map,
     format_address_map_summary,
+    validate_address_overrides,
 )
 from core.devices import (
     make_device_spec, legacy_device_specs, assign_mmio_bases, multi_device_warnings,
-    get_memory_layout,
+    get_memory_layout, apply_address_overrides,
 )
 from core.cpu import AK32Part
 from core.dev import RamPart, UartPart
@@ -35,6 +36,7 @@ from ui.prop import PropPanel
 from ui.ribbon import RibbonBar
 from ui.run_status import RunStatusPanel
 from ui.port_detail import PortDetailPanel, build_node_info, build_wire_info
+from ui.address_map_editor import AddressMapEditor
 
 # Minimal simulation memory map (kept within 16-bit immediate range for LDI).
 # Canonical values live in core/devices.py and are imported here so the device
@@ -76,6 +78,8 @@ class MainWin(QMainWindow):
         self._address_map: dict[int, int] = {}
         # Runtime program loaded into the virtual circuit (PATCH_CIRCUIT_WRITE_RUN_HELLO_V05).
         self._loaded_program: "dict | None" = None
+        # Per-device Address Map overrides (PATCH_ADDRESS_MAP_EDITOR_V08); empty = auto.
+        self._address_overrides: dict = {}
         self._setup_log()            # must be first — others write to self._log
         self._setup_console()        # Console: program/run output (tabified with Log)
         self._setup_uart_console()   # UART Console panel (tabified with Log)
@@ -88,6 +92,7 @@ class MainWin(QMainWindow):
         self._setup_register_view()  # Register View (tabified with Properties)
         self._setup_run_status()     # Run Status Panel (tabified with Register View)
         self._setup_port_detail()    # Port Detail Panel (tabified with Run Status)
+        self._setup_address_map_editor()  # Address Map Editor (tabified with Port Detail)
         self._canvas.selection_changed.connect(self._on_canvas_selection)
         self._canvas.tab_open_requested.connect(self._on_open_tab)
         self._canvas.wire_selected.connect(self._on_wire_selected)
@@ -185,15 +190,15 @@ class MainWin(QMainWindow):
 
     # ----------------------------------------- device registry (PATCH_DEVICE_REGISTRY_REFACTOR_V08)
 
-    def _resolve_device_specs(self, plan: "dict | None"):
-        """Return ``(mode, layout, device_specs)`` for the circuit / legacy state.
+    def _auto_device_specs(self, plan: "dict | None"):
+        """Return ``(mode, layout, device_specs)`` from automatic placement only.
 
         The MemoryLayout (PATCH_CODE_REGION_MMIO_RELOCATION_V08) decides RAM/MMIO
         base+size; the default is the current behaviour (circuit_compat / legacy).
         circuit mode classifies the resolved CPU/RAM/UART nodes by part_id (so e.g.
         a ``mem.vram`` node is *not* treated as RAM). legacy mode is the fixed
         synthetic CPU + 256B RAM + UART circuit (no canvas dependency — this also
-        runs at startup before the canvas exists).
+        runs at startup before the canvas exists). No per-device overrides applied.
         """
         circuit = bool(plan and plan.get("cpu") and plan.get("rams") and plan.get("uarts"))
         mode = "circuit" if circuit else "legacy"
@@ -208,6 +213,16 @@ class MainWin(QMainWindow):
         for node_id in plan["uarts"]:
             specs.append(make_device_spec(node_id, self._part_of(node_id), layout=layout))
         return mode, layout, assign_mmio_bases(specs, layout=layout)
+
+    def _resolve_device_specs(self, plan: "dict | None"):
+        """Auto specs + per-device Address Map overrides (PATCH_ADDRESS_MAP_EDITOR_V08).
+
+        With no overrides this is identical to the automatic placement, so the
+        default behaviour is unchanged.
+        """
+        mode, layout, specs = self._auto_device_specs(plan)
+        specs = apply_address_overrides(specs, self._address_overrides)
+        return mode, layout, specs
 
     def _part_of(self, node_id):
         node = self._canvas.get_node(node_id) if node_id else None
@@ -639,6 +654,59 @@ class MainWin(QMainWindow):
         self.addDockWidget(Qt.RightDockWidgetArea, self._port_detail)
         self.tabifyDockWidget(self._run_status, self._port_detail)
 
+    def _setup_address_map_editor(self):
+        """Address Map Editor — view + per-device base/size override (PATCH_ADDRESS_MAP_EDITOR_V08)."""
+        self._address_map_editor = AddressMapEditor(self, self)
+        self.addDockWidget(Qt.RightDockWidgetArea, self._address_map_editor)
+        self.tabifyDockWidget(self._port_detail, self._address_map_editor)
+
+    # ----------------------------------------- address map editor (PATCH_ADDRESS_MAP_EDITOR_V08)
+
+    def address_editor_data(self):
+        """Return ``(auto_addressable_specs, overrides_copy, layout)`` for the editor.
+
+        Auto specs = device specs BEFORE per-device overrides, so the editor shows the
+        automatic placement and the current manual overrides separately.
+        """
+        _mode, layout, specs = self._auto_device_specs(self._resolve_circuit_plan())
+        addr = [s for s in specs if s.get("addressable")]
+        return addr, dict(self._address_overrides), layout
+
+    def validate_address_map_overrides(self, overrides: dict) -> list:
+        """Validate proposed overrides against the current auto specs (read-only)."""
+        _mode, layout, specs = self._auto_device_specs(self._resolve_circuit_plan())
+        addr = [s for s in specs if s.get("addressable")]
+        return validate_address_overrides(addr, overrides, layout=layout)
+
+    def apply_address_map_overrides(self, overrides: dict) -> None:
+        """Set overrides, rebuild the runtime/Address Map, refresh panels (+ persist)."""
+        self._address_overrides = dict(overrides or {})
+        self._rebuild_devices()
+        self._log.append(
+            f"Address Map overrides applied: {len(self._address_overrides)} device(s)"
+        )
+        if self._project_root is not None:
+            self._persist_system()
+
+    def reset_address_map_overrides(self) -> None:
+        """Clear all overrides (back to automatic layout) and rebuild."""
+        self._address_overrides = {}
+        self._rebuild_devices()
+        self._log.append("Address Map overrides reset to auto")
+        if self._project_root is not None:
+            self._persist_system()
+
+    def _rebuild_devices(self) -> None:
+        """Rebuild the device runtime + Address Map from the current canvas/overrides.
+
+        Note: like Write/Build this re-creates the runtime (RAM is cleared), so a
+        loaded program must be re-written after an address-map change.
+        """
+        self._make_sim(self._resolve_circuit_plan())
+        self._sim_cycle = 0
+        self._refresh_run_panels()
+        self._update_port_detail()
+
     # ----------------------------------------- port detail (PATCH_PORT_DETAIL_V07)
 
     def _collect_port_detail(self) -> dict:
@@ -819,6 +887,8 @@ class MainWin(QMainWindow):
         self._editor_tabs.close_all_tabs()
         self._editor_tabs.set_project_root(root)
         self._canvas.import_parts([], {})
+        self._address_overrides = {}        # PATCH_ADDRESS_MAP_EDITOR_V08
+        self._address_map_editor.refresh()
         self._uart_console.clear()
         self._bus_trace.clear()
         self._log.append(f"New project: {root.as_posix()}")
@@ -837,8 +907,12 @@ class MainWin(QMainWindow):
             self._log.append(f"Open failed: {exc}")
             return
         self._canvas.import_parts(system.get("parts", []), self._part_library())
+        # PATCH_ADDRESS_MAP_EDITOR_V08: restore overrides (absent in old projects = {}).
+        ov = system.get("address_map_overrides")
+        self._address_overrides = dict(ov) if isinstance(ov, dict) else {}
         self._project_root = root
         self._editor_tabs.set_project_root(root)
+        self._address_map_editor.refresh()
         self._log.append(
             f"Opened project: {root.as_posix()}  [{project.get('name', '?')}]"
         )
@@ -853,6 +927,8 @@ class MainWin(QMainWindow):
         except Exception:
             system = {"chips": [], "parts": [], "links": [], "memory_map": []}
         system["parts"] = self._canvas.export_parts()
+        # PATCH_ADDRESS_MAP_EDITOR_V08: persist per-device Address Map overrides.
+        system["address_map_overrides"] = dict(self._address_overrides)
         save_system(root, system)
 
     def _save_project(self):
@@ -1370,6 +1446,7 @@ class MainWin(QMainWindow):
         self._ribbon.add_page("Debug", [           # I: Log and Console separated
             self._run_status.toggleViewAction(),
             self._port_detail.toggleViewAction(),
+            self._address_map_editor.toggleViewAction(),
             self._reg_view_dock.toggleViewAction(),
             self._mem_viewer.toggleViewAction(),
             self._bus_trace_dock.toggleViewAction(),

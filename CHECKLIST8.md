@@ -55,7 +55,12 @@
   - `python -m pytest tests/` → **988 passed**（973 + 新規 15）
   - 次候補: `PATCH_ADDRESS_MAP_EDITOR_V08` または `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08`
 * [x] 次候補 `PATCH_ADDRESS_MAP_EDITOR_V08` の設計資料を作成した（2026-06-18）
-  - `PATCH_ADDRESS_MAP_EDITOR_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・GUI で per-device base/size override（auto/manual・Reset to Auto・validation）・既定は現行互換**
+  - `PATCH_ADDRESS_MAP_EDITOR_V08_ROADMAP.md` / `..._CHECKLIST.md`
+* [x] `PATCH_ADDRESS_MAP_EDITOR_V08` 実装完了（2026-06-18・**override 無しは現行互換**）
+  - `ui/address_map_editor.py`（Dock + 表 + Apply/Reset/Refresh）/ `core/devices.py` に `apply_address_overrides`・`parse_address_int` / `core/circuit.py` に `validate_address_overrides` / `ui/win.py` を `_auto_device_specs`+override 分割・editor API・persist
+  - GUI で per-device base/size override（auto/manual・Reset to Auto・range/overlap/align validation・error は Apply ブロック）・system.json 永続化
+  - `python -m pytest tests/` → **1011 passed**（988 + 新規 23）
+  - 次候補: `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08` または `PATCH_AK32_INSTRUCTION_EXPANSION_V08`
 * [ ] v0.8 テーマを確定する（候補: Device Expansion & Connection Validation）
   - 完了条件: ユーザーがテーマと最初のパッチを決定する
 * [ ] 最初のパッチ（`PATCH_PORT_SCHEMA_V08` 想定）の実装範囲をユーザーが承認する

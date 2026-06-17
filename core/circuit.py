@@ -12,7 +12,9 @@ strict bus protocols are out of scope here (see PATCH_VIRTUAL_CIRCUIT_RUNTIME_V0
 """
 from __future__ import annotations
 
-from core.devices import device_kind, get_memory_layout
+from core.devices import (
+    device_kind, get_memory_layout, apply_address_overrides, multi_device_warnings,
+)
 
 
 def _node_kind(node: dict) -> str:
@@ -287,3 +289,81 @@ def format_address_map_summary(amap: dict) -> list:
             f"{dev.get('base', 0):#06x}-{dev.get('end', 0):#06x}  {size_str}{tag}"
         )
     return lines
+
+
+# ---------------------------------------------------------------------------
+# Address Map override validation (PATCH_ADDRESS_MAP_EDITOR_V08)
+# ---------------------------------------------------------------------------
+
+ADDRESS_RANGE_INVALID = "ADDRESS_RANGE_INVALID"
+ADDRESS_OVERLAP       = "ADDRESS_OVERLAP"
+ADDRESS_MMIO_ALIGN    = "ADDRESS_MMIO_ALIGN"
+ADDRESS_MMIO_SIZE     = "ADDRESS_MMIO_SIZE"
+
+_ADDR_MAX = 0xFFFF   # AK32 imm16 / 64 KB space
+
+
+def _issue(severity, code, message, **details):
+    return {"severity": severity, "code": code, "message": message,
+            "details": dict(details)}
+
+
+def validate_address_overrides(base_specs: list, overrides: "dict | None",
+                               *, layout=None) -> list:
+    """Validate the Address Map that *overrides* would produce (warning-only model).
+
+    Applies *overrides* to *base_specs* (auto specs), then checks:
+
+      * error  ADDRESS_RANGE_INVALID — base/size not int, base<0, size<=0, end>0xFFFF
+      * error  ADDRESS_OVERLAP       — bus attach ranges overlap (respects the
+                                       layout's mmio_inside_ram via the address map)
+      * warning ADDRESS_MMIO_ALIGN   — MMIO base not 16-byte aligned
+      * warning ADDRESS_MMIO_SIZE    — MMIO size != layout.mmio_size
+      * warning MULTI_RAM_UNSUPPORTED — more than one RAM
+
+    Returns issue dicts (shape matches port/bus validation). Errors mean Apply / Run
+    should be blocked; warnings are advisory. Pure / never raises.
+    """
+    layout = layout or get_memory_layout()
+    specs = apply_address_overrides(base_specs, overrides)
+    addr = [s for s in specs if s.get("addressable")]
+    issues: list = []
+
+    range_ok = True
+    for s in addr:
+        b, sz = s.get("base"), s.get("size")
+        nid = s.get("node_id")
+        if not isinstance(b, int) or not isinstance(sz, int):
+            issues.append(_issue("error", ADDRESS_RANGE_INVALID,
+                f"{nid}: base/size must be integers", node=nid, base=b, size=sz))
+            range_ok = False
+            continue
+        if b < 0 or sz <= 0 or (b + sz - 1) > _ADDR_MAX:
+            issues.append(_issue("error", ADDRESS_RANGE_INVALID,
+                f"{nid}: invalid range base={b:#x} size={sz:#x} "
+                f"(must fit 0x0000-0x{_ADDR_MAX:04x}, size>0)",
+                node=nid, base=b, size=sz))
+            range_ok = False
+
+    # Overlap only checkable once ranges are valid; the address map carves MMIO out
+    # of RAM when layout.mmio_inside_ram is True, so an intentional overlay is NOT
+    # flagged, while a non-overlay overlap is.
+    if range_ok:
+        amap = build_address_map_from_devices(layout.name, addr, layout=layout)
+        for msg in validate_address_map(amap):
+            issues.append(_issue("error", ADDRESS_OVERLAP, msg))
+
+    # Advisory warnings.
+    for s in addr:
+        if s.get("role") == "mmio" and isinstance(s.get("base"), int):
+            if s["base"] % 0x10 != 0:
+                issues.append(_issue("warning", ADDRESS_MMIO_ALIGN,
+                    f"{s.get('node_id')}: MMIO base {s['base']:#x} is not 16-byte aligned",
+                    node=s.get("node_id"), base=s["base"]))
+            if s.get("size") != layout.mmio_size:
+                issues.append(_issue("warning", ADDRESS_MMIO_SIZE,
+                    f"{s.get('node_id')}: MMIO size {s.get('size')} != {layout.mmio_size}",
+                    node=s.get("node_id"), size=s.get("size")))
+
+    issues.extend(multi_device_warnings(specs))
+    return issues
