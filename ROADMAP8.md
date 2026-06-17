@@ -43,6 +43,9 @@ v0.8 は、この実行基盤の上で **接続の妥当性検証** と **デバ
 ### B. Bus protocol validation
 - bus.master ↔ bus.slave の対応、1 master 制約などの検証。
 - Address Map と組み合わせた到達性チェック。
+- **次候補として `PATCH_BUS_PROTOCOL_VALIDATION_V08` を検討中**（`PATCH_PORT_DIRECTION_WIDTH_VALIDATION_V08`
+  の次）。初手は **warning only**（bus group の master/slave 数診断。到達性本対応は次段）。
+  設計資料: `PATCH_BUS_PROTOCOL_VALIDATION_V08_ROADMAP.md` / `..._CHECKLIST.md`（実装は未着手）。
 
 ### C. 複数 RAM / UART handling
 - 現状は単一前提。複数 RAM/UART を Address Map 上で共存させる。

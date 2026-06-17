@@ -27,6 +27,8 @@
   - `core/port_validation.py` 追加 / `ui/canvas.py` 接続時検証+API / `ui/port_detail.py` Validation 表示
   - `python -m pytest tests/` → **913 passed**（878 + 新規 35）
   - 次候補: `PATCH_BUS_PROTOCOL_VALIDATION_V08`（1 master 制約・到達性）
+* [x] 次候補 `PATCH_BUS_PROTOCOL_VALIDATION_V08` の設計資料を作成した（2026-06-17）
+  - `PATCH_BUS_PROTOCOL_VALIDATION_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・初手 warning only（bus group 診断）**
 * [ ] v0.8 テーマを確定する（候補: Device Expansion & Connection Validation）
   - 完了条件: ユーザーがテーマと最初のパッチを決定する
 * [ ] 最初のパッチ（`PATCH_PORT_SCHEMA_V08` 想定）の実装範囲をユーザーが承認する
