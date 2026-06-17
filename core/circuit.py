@@ -135,46 +135,93 @@ def resolve_circuit(nodes: list[dict], connections: list[dict],
 # overlap, so an intentional MMIO overlay is not flagged.
 
 
+_MEMORY_KINDS = ("ram", "vram", "rom")
+
+
+def build_address_map_from_devices(mode, device_specs) -> dict:
+    """Build an Address Map from a list of *addressable* device specs.
+
+    Each spec needs ``kind`` / ``base`` / ``size`` (+ optional ``node_id`` /
+    ``device_id`` or ``runtime_id`` / ``label``). Memory-kind devices (ram/vram/rom)
+    act as containers; a non-memory device that falls strictly inside a memory
+    device becomes a carved-out MMIO overlay window (the memory device is attached
+    around it). This generalises the RAM + UART carving of the legacy
+    ``build_address_map()`` (PATCH_DEVICE_REGISTRY_REFACTOR_V08); for the 1-memory +
+    1-window case the output is identical.
+    """
+    specs = [s for s in (device_specs or []) if s.get("addressable", True)]
+    mem = [s for s in specs if s.get("kind") in _MEMORY_KINDS]
+
+    def _dev_id(s):
+        return s.get("device_id") or s.get("runtime_id") or s.get("kind")
+
+    def _common(s, end):
+        return {
+            "kind": s.get("kind"), "node_id": s.get("node_id"),
+            "device_id": _dev_id(s), "base": s["base"], "size": s["size"],
+            "end": end, "label": s.get("label") or str(s.get("kind", "")).upper(),
+            "readable": True, "writable": True,
+        }
+
+    devices = []
+    for s in specs:
+        end = s["base"] + s["size"] - 1
+        if s.get("kind") in _MEMORY_KINDS:
+            windows = []
+            for w in specs:
+                if w is s or w.get("kind") in _MEMORY_KINDS:
+                    continue
+                w_end = w["base"] + w["size"] - 1
+                inside = (s["base"] <= w["base"]) and (w_end <= end)
+                if inside and (w["base"] > s["base"] or w_end < end):
+                    windows.append((w["base"], w_end))
+            windows.sort()
+            ranges, cursor = [], s["base"]
+            for wb, we in windows:
+                if wb > cursor:
+                    ranges.append((cursor, wb - 1))
+                cursor = we + 1
+            if cursor <= end:
+                ranges.append((cursor, end))
+            if not windows:
+                ranges = [(s["base"], end)]
+            dev = _common(s, end)
+            dev["role"] = "memory"
+            dev["attach_ranges"] = ranges
+            dev["reserved"] = windows
+            devices.append(dev)
+        else:
+            inside_kind = None
+            for m in mem:
+                m_end = m["base"] + m["size"] - 1
+                if (m["base"] <= s["base"]) and (end <= m_end):
+                    inside_kind = m.get("kind")
+                    break
+            dev = _common(s, end)
+            dev["role"] = "mmio" if inside_kind else "io"
+            dev["attach_ranges"] = [(s["base"], end)]
+            dev["overlay"] = inside_kind if inside_kind else None
+            devices.append(dev)
+    return {"mode": mode, "devices": devices}
+
+
 def build_address_map(*, mode, ram_node, ram_base, ram_size,
                       uart_node, uart_base, uart_size,
                       ram_device_id="sim_ram", uart_device_id="sim_uart"):
-    """Build an Address Map for a RAM + UART circuit.
+    """Build an Address Map for a RAM + UART circuit (backward-compatible wrapper).
 
-    Returns ``{"mode": mode, "devices": [ram_dev, uart_dev]}``. If the UART range
-    falls strictly inside the RAM logical range, the RAM is attached around the
-    UART window (so the bus has no real overlap) and the UART is marked as an MMIO
-    overlay. Otherwise RAM and UART get a single attach range each.
+    Delegates to :func:`build_address_map_from_devices` (the device-list-driven
+    builder). The output is identical to the previous RAM/UART-specific
+    implementation: if the UART range falls strictly inside the RAM logical range,
+    the RAM is attached around the UART window and the UART is an MMIO overlay.
     """
-    ram_end  = ram_base + ram_size - 1
-    uart_end = uart_base + uart_size - 1
-
-    uart_inside = (ram_base <= uart_base) and (uart_end <= ram_end)
-    carves = uart_inside and (uart_base > ram_base or uart_end < ram_end)
-    if carves:
-        ram_ranges = []
-        if uart_base > ram_base:
-            ram_ranges.append((ram_base, uart_base - 1))
-        if uart_end < ram_end:
-            ram_ranges.append((uart_end + 1, ram_end))
-        reserved = [(uart_base, uart_end)]
-    else:
-        ram_ranges = [(ram_base, ram_end)]
-        reserved = []
-
-    ram_dev = {
-        "kind": "ram", "node_id": ram_node, "device_id": ram_device_id,
-        "base": ram_base, "size": ram_size, "end": ram_end, "label": "RAM",
-        "role": "memory", "readable": True, "writable": True,
-        "attach_ranges": ram_ranges, "reserved": reserved,
-    }
-    uart_dev = {
-        "kind": "uart", "node_id": uart_node, "device_id": uart_device_id,
-        "base": uart_base, "size": uart_size, "end": uart_end, "label": "UART",
-        "role": "mmio" if uart_inside else "io", "readable": True, "writable": True,
-        "attach_ranges": [(uart_base, uart_end)],
-        "overlay": "ram" if uart_inside else None,
-    }
-    return {"mode": mode, "devices": [ram_dev, uart_dev]}
+    specs = [
+        {"kind": "ram", "node_id": ram_node, "device_id": ram_device_id,
+         "base": ram_base, "size": ram_size, "label": "RAM", "addressable": True},
+        {"kind": "uart", "node_id": uart_node, "device_id": uart_device_id,
+         "base": uart_base, "size": uart_size, "label": "UART", "addressable": True},
+    ]
+    return build_address_map_from_devices(mode, specs)
 
 
 def _ranges_overlap(a, b) -> bool:

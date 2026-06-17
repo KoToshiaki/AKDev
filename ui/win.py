@@ -14,10 +14,11 @@ from PySide6.QtCore import Qt, QMimeData, QUrl
 from asm.asm import AsmError, assemble_ex
 from core.circuit import (
     resolve_circuit,
-    build_address_map,
+    build_address_map_from_devices,
     validate_address_map,
     format_address_map_summary,
 )
+from core.devices import make_device_spec, legacy_device_specs
 from core.cpu import AK32Part
 from core.dev import RamPart, UartPart
 from core.project import create_project, load_project, load_target, save_system
@@ -33,15 +34,17 @@ from ui.run_status import RunStatusPanel
 from ui.port_detail import PortDetailPanel, build_node_info, build_wire_info
 
 # Minimal simulation memory map (kept within 16-bit immediate range for LDI).
-_SIM_RAM_BASE  = 0x0000
-_SIM_RAM_SIZE  = 0x0100   # 256 bytes — ends at 0x00FF (legacy fixed circuit)
-_SIM_UART_BASE = 0x0100
-_SIM_UART_SIZE = 8
-# Canvas-derived circuit mode RAM size (PATCH_PLAN_DRIVEN_DEVICES_V07).
-# RAM fills the whole 16-bit address space (64 KB); the UART sits inside it as a
-# memory-mapped I/O window at _SIM_UART_BASE, so UART stays at 0x0100, code still
-# starts at 0x0000, and addresses remain within the LDI imm16 range.
-_CIRCUIT_RAM_SIZE = 0x10000   # 64 KB — ends at 0xFFFF
+# Canonical values live in core/devices.py and are imported here so the device
+# registry and MainWin share one source (PATCH_DEVICE_REGISTRY_REFACTOR_V08).
+# circuit mode: RAM fills the whole 16-bit space (64 KB) with the UART as an MMIO
+# window at 0x0100; legacy mode keeps the fixed 256-byte RAM.
+from core.devices import (
+    RAM_BASE         as _SIM_RAM_BASE,
+    LEGACY_RAM_SIZE  as _SIM_RAM_SIZE,
+    UART_BASE        as _SIM_UART_BASE,
+    UART_SIZE        as _SIM_UART_SIZE,
+    CIRCUIT_RAM_SIZE as _CIRCUIT_RAM_SIZE,
+)
 
 
 class _PartsTree(QTreeWidget):
@@ -167,54 +170,83 @@ class MainWin(QMainWindow):
         Memory map: UART stays at 0x0100. In circuit mode the RAM fills the whole
         64 KB address space with the UART as a memory-mapped I/O window inside it
         (RAM attached for 0x0000–0x00FF and 0x0108–0xFFFF), so code still starts at
-        0x0000 and all addresses stay within the LDI imm16 range. A dedicated
-        address-map manager is PATCH_ADDRESS_MAP_V07.
+        0x0000 and all addresses stay within the LDI imm16 range.
+
+        PATCH_DEVICE_REGISTRY_REFACTOR_V08: the body is now device-spec/list driven
+        (placed node -> device spec -> runtime device / Address Map), but the
+        external behaviour is unchanged.
         """
         self._sim_bus = Bus(cycle_fn=lambda: self._sim_cycle)
+        mode, specs = self._resolve_device_specs(plan)
+        self._build_runtime_devices(plan, mode, specs)
 
+    # ----------------------------------------- device registry (PATCH_DEVICE_REGISTRY_REFACTOR_V08)
+
+    def _resolve_device_specs(self, plan: "dict | None"):
+        """Return ``(mode, device_specs)`` for the current circuit / legacy state.
+
+        circuit mode: classify the resolved CPU/RAM/UART nodes by part_id (so e.g.
+        a ``mem.vram`` node is *not* treated as RAM). legacy mode: the fixed
+        synthetic CPU + 256B RAM + UART circuit (no canvas dependency — this also
+        runs at startup before the canvas exists).
+        """
         circuit = bool(plan and plan.get("cpu") and plan.get("rams") and plan.get("uarts"))
-        if circuit:
-            # Devices derived from the resolved plan. Keep the device ids stable
-            # (sim_ram/sim_uart/sim_cpu) so bus tracing, the signal overlay and the
-            # runtime's UART detection key are unchanged; record the plan node ids.
-            ram_size = _CIRCUIT_RAM_SIZE
-            self._sim_ram_node  = plan["rams"][0]
-            self._sim_uart_node = plan["uarts"][0]
-            self._sim_cpu_node  = plan["cpu"]
-            mode = "circuit"
-        else:
-            # Legacy fixed circuit (unchanged behaviour).
-            ram_size = _SIM_RAM_SIZE
-            self._sim_ram_node  = None
-            self._sim_uart_node = None
-            self._sim_cpu_node  = None
-            mode = "legacy"
+        if not circuit:
+            return "legacy", legacy_device_specs()
+        specs = []
+        for node_id in (plan["cpu"], plan["rams"][0], plan["uarts"][0]):
+            node = self._canvas.get_node(node_id) if node_id else None
+            part = node.part() if node else None
+            specs.append(make_device_spec(node_id, part, mode="circuit"))
+        return "circuit", specs
 
-        self._sim_ram  = RamPart("sim_ram",  "RAM",  size=ram_size,    base=_SIM_RAM_BASE)
-        self._sim_uart = UartPart("sim_uart", "UART", base=_SIM_UART_BASE)
-        self._sim_cpu  = AK32Part("sim_cpu",  "AK32", self._sim_bus, reset_pc=_SIM_RAM_BASE)
+    def _build_runtime_devices(self, plan, mode, specs):
+        """Instantiate runtime Parts from device specs and bind the runtime.
 
-        # Build the Address Map (PATCH_ADDRESS_MAP_V07) and attach devices to the
-        # bus exactly per the map's attach ranges, so the bus and the Address Map
-        # stay consistent. In circuit mode the UART is an MMIO window inside RAM,
-        # so RAM is attached around it (no real bus overlap).
-        amap = build_address_map(
-            mode=mode,
-            ram_node=self._sim_ram_node, ram_base=_SIM_RAM_BASE, ram_size=ram_size,
-            uart_node=self._sim_uart_node, uart_base=_SIM_UART_BASE, uart_size=_SIM_UART_SIZE,
+        Only ``runtime_backed`` kinds (cpu/ram/uart) are instantiated today; their
+        ``runtime_id`` (sim_cpu/sim_ram/sim_uart) is kept stable for bus tracing,
+        the signal overlay and the runtime's UART detection. A ``vram`` (or other
+        non-backed) spec is classified but NOT turned into a RamPart. Multiple
+        RAM/UART are not handled here — only the resolved first RAM/UART/CPU become
+        runtime devices (full support: PATCH_MULTI_RAM_UART_ADDRESS_MAP_V08).
+        """
+        self._sim_ram = self._sim_uart = self._sim_cpu = None
+        self._sim_ram_node = self._sim_uart_node = self._sim_cpu_node = None
+        for spec in specs:
+            if not spec.get("runtime_backed"):
+                continue
+            kind = spec["kind"]
+            if kind == "ram" and self._sim_ram is None:
+                self._sim_ram = RamPart("sim_ram", "RAM",
+                                        size=spec["size"], base=spec["base"])
+                self._sim_ram_node = spec["node_id"]
+            elif kind == "uart" and self._sim_uart is None:
+                self._sim_uart = UartPart("sim_uart", "UART", base=spec["base"])
+                self._sim_uart_node = spec["node_id"]
+            elif kind == "cpu" and self._sim_cpu is None:
+                self._sim_cpu = AK32Part("sim_cpu", "AK32", self._sim_bus,
+                                         reset_pc=_SIM_RAM_BASE)
+                self._sim_cpu_node = spec["node_id"]
+
+        # Address Map from the addressable specs (RAM/UART), then attach each device
+        # to the bus exactly per its attach ranges (UART carved out of RAM).
+        amap = build_address_map_from_devices(
+            mode, [s for s in specs if s.get("addressable")]
         )
-        parts_by_id = {"sim_ram": self._sim_ram, "sim_uart": self._sim_uart}
+        parts_by_id = {}
+        if self._sim_ram is not None:
+            parts_by_id["sim_ram"] = self._sim_ram
+        if self._sim_uart is not None:
+            parts_by_id["sim_uart"] = self._sim_uart
         for dev in amap["devices"]:
-            part = parts_by_id[dev["device_id"]]
+            part = parts_by_id.get(dev.get("device_id"))
+            if part is None:
+                continue
             for lo, hi in dev["attach_ranges"]:
                 self._sim_bus.attach(part, lo, hi - lo + 1)
 
         self._sim_bus.tracing = True      # enable bus tracing
-        # Virtual circuit runtime — wraps the devices for stepped, traced execution
-        # (PATCH_VIRTUAL_CPU_STEP_TRACE_V05) and is bound to a Canvas-derived
-        # CircuitPlan (PATCH_VIRTUAL_CIRCUIT_RUNTIME_V05 / PATCH_PLAN_DRIVEN_DEVICES_V07).
-        # Physically host Python, but models AKDev's virtual CPU/RAM/UART advanced
-        # one instruction at a time.
+        # Virtual circuit runtime — wraps the devices for stepped, traced execution.
         self._runtime = VirtualCircuitRuntime(
             self._sim_bus, self._sim_ram, self._sim_uart, self._sim_cpu
         )
