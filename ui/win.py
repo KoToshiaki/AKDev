@@ -20,6 +20,7 @@ from core.circuit import (
 )
 from core.devices import (
     make_device_spec, legacy_device_specs, assign_mmio_bases, multi_device_warnings,
+    get_memory_layout,
 )
 from core.cpu import AK32Part
 from core.dev import RamPart, UartPart
@@ -179,36 +180,40 @@ class MainWin(QMainWindow):
         external behaviour is unchanged.
         """
         self._sim_bus = Bus(cycle_fn=lambda: self._sim_cycle)
-        mode, specs = self._resolve_device_specs(plan)
-        self._build_runtime_devices(plan, mode, specs)
+        mode, layout, specs = self._resolve_device_specs(plan)
+        self._build_runtime_devices(plan, mode, layout, specs)
 
     # ----------------------------------------- device registry (PATCH_DEVICE_REGISTRY_REFACTOR_V08)
 
     def _resolve_device_specs(self, plan: "dict | None"):
-        """Return ``(mode, device_specs)`` for the current circuit / legacy state.
+        """Return ``(mode, layout, device_specs)`` for the circuit / legacy state.
 
-        circuit mode: classify the resolved CPU/RAM/UART nodes by part_id (so e.g.
-        a ``mem.vram`` node is *not* treated as RAM). legacy mode: the fixed
+        The MemoryLayout (PATCH_CODE_REGION_MMIO_RELOCATION_V08) decides RAM/MMIO
+        base+size; the default is the current behaviour (circuit_compat / legacy).
+        circuit mode classifies the resolved CPU/RAM/UART nodes by part_id (so e.g.
+        a ``mem.vram`` node is *not* treated as RAM). legacy mode is the fixed
         synthetic CPU + 256B RAM + UART circuit (no canvas dependency — this also
         runs at startup before the canvas exists).
         """
         circuit = bool(plan and plan.get("cpu") and plan.get("rams") and plan.get("uarts"))
+        mode = "circuit" if circuit else "legacy"
+        layout = get_memory_layout(mode)
         if not circuit:
-            return "legacy", assign_mmio_bases(legacy_device_specs())
+            return mode, layout, assign_mmio_bases(legacy_device_specs(layout), layout=layout)
         # PATCH_MULTI_RAM_UART_ADDRESS_MAP_V08: spec ALL resolved RAM/UART nodes (not
         # just the first), then auto-place MMIO windows (UART1=0x0100, UART2=0x0110…).
-        specs = [make_device_spec(plan["cpu"], self._part_of(plan["cpu"]), mode="circuit")]
+        specs = [make_device_spec(plan["cpu"], self._part_of(plan["cpu"]), layout=layout)]
         for node_id in plan["rams"]:
-            specs.append(make_device_spec(node_id, self._part_of(node_id), mode="circuit"))
+            specs.append(make_device_spec(node_id, self._part_of(node_id), layout=layout))
         for node_id in plan["uarts"]:
-            specs.append(make_device_spec(node_id, self._part_of(node_id), mode="circuit"))
-        return "circuit", assign_mmio_bases(specs)
+            specs.append(make_device_spec(node_id, self._part_of(node_id), layout=layout))
+        return mode, layout, assign_mmio_bases(specs, layout=layout)
 
     def _part_of(self, node_id):
         node = self._canvas.get_node(node_id) if node_id else None
         return node.part() if node else None
 
-    def _build_runtime_devices(self, plan, mode, specs):
+    def _build_runtime_devices(self, plan, mode, layout, specs):
         """Instantiate runtime Parts from device specs and bind the runtime.
 
         Only ``runtime_backed`` kinds (cpu/ram/uart) are instantiated, and only the
@@ -217,6 +222,8 @@ class MainWin(QMainWindow):
         A ``vram`` / extra-UART / extra-RAM spec is classified + (for UART) placed on
         the Address Map, but NOT turned into a runtime Part this patch
         (PATCH_MULTI_RAM_UART_ADDRESS_MAP_V08; full multi-device runtime is later).
+        The CPU reset PC comes from the layout (PATCH_CODE_REGION_MMIO_RELOCATION_V08;
+        default 0x0000).
         """
         self._sim_ram = self._sim_uart = self._sim_cpu = None
         self._sim_ram_node = self._sim_uart_node = self._sim_cpu_node = None
@@ -233,7 +240,7 @@ class MainWin(QMainWindow):
                 self._sim_uart_node = spec["node_id"]
             elif kind == "cpu" and self._sim_cpu is None:
                 self._sim_cpu = AK32Part("sim_cpu", "AK32", self._sim_bus,
-                                         reset_pc=_SIM_RAM_BASE)
+                                         reset_pc=layout.reset_pc)
                 self._sim_cpu_node = spec["node_id"]
 
         # Address Map from the addressable specs: the first RAM (memory container) +
@@ -248,7 +255,7 @@ class MainWin(QMainWindow):
                     continue
                 seen_ram = True
             addr_specs.append(s)
-        amap = build_address_map_from_devices(mode, addr_specs)
+        amap = build_address_map_from_devices(mode, addr_specs, layout=layout)
 
         parts_by_id = {}
         if self._sim_ram is not None:

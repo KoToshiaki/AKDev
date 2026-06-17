@@ -12,16 +12,85 @@ This patch keeps behaviour unchanged: only ``cpu`` / ``ram`` / ``uart`` are
 RAM/UART and new-device runtimes are out of scope (see
 PATCH_MULTI_RAM_UART_ADDRESS_MAP_V08 / PATCH_DEVICE_EXPANSION_ROM_INPUT_V08).
 
+PATCH_CODE_REGION_MMIO_RELOCATION_V08 adds a ``MemoryLayout`` (named address-space
+layouts) that the spec/Address-Map builders consult.  The **default stays the
+current behaviour** (``circuit_compat`` / ``legacy``); ``game16`` is defined as a
+future candidate only and is never used by default.
+
 Pure / Qt-independent.
 """
 from __future__ import annotations
 
-# Canonical memory-map constants (mirrored by ui.win which imports them).
-RAM_BASE         = 0x0000
-UART_BASE        = 0x0100
-UART_SIZE        = 0x0008
-CIRCUIT_RAM_SIZE = 0x10000   # circuit mode: RAM fills the 16-bit space (64 KB)
-LEGACY_RAM_SIZE  = 0x0100    # legacy fixed circuit: 256 bytes
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class MemoryLayout:
+    """An address-space layout: where RAM / MMIO / code live in the 16-bit space.
+
+    AK32 is imm16, so every address fits in 64 KB (0x0000–0xFFFF). ``mmio_inside_ram``
+    selects whether MMIO windows are carved out of a RAM that spans them (current
+    behaviour) or live in a separate, non-overlapping region (future game16-style).
+    ``stack_top`` is reserved for a future CALL/RET stack (unused today).
+    """
+    name: str
+    ram_base: int
+    ram_size: int
+    mmio_base: int
+    mmio_stride: int
+    mmio_size: int
+    mmio_inside_ram: bool
+    code_base: int
+    reset_pc: int
+    stack_top: "int | None" = None
+
+
+# legacy fixed circuit (no CPU on canvas): 256 B RAM + UART @0x0100 (adjacent).
+LEGACY = MemoryLayout(
+    name="legacy", ram_base=0x0000, ram_size=0x0100,
+    mmio_base=0x0100, mmio_stride=0x10, mmio_size=0x08, mmio_inside_ram=False,
+    code_base=0x0000, reset_pc=0x0000,
+)
+
+# circuit mode (default): RAM fills the 64 KB space, UART is an MMIO overlay window.
+CIRCUIT_COMPAT = MemoryLayout(
+    name="circuit_compat", ram_base=0x0000, ram_size=0x10000,
+    mmio_base=0x0100, mmio_stride=0x10, mmio_size=0x08, mmio_inside_ram=True,
+    code_base=0x0000, reset_pc=0x0000,
+)
+
+# game16 (DESIGN-ONLY candidate — never used by default this patch). Non-overlapping
+# regions: ROM 0x0000–0x7FFF / RAM 0x8000–0xBFFF / VRAM 0xC000–0xDFFF (placed by
+# future device expansion) / MMIO 0xE000 / reserved 0xF000–0xFFFF.
+GAME16 = MemoryLayout(
+    name="game16", ram_base=0x8000, ram_size=0x4000,
+    mmio_base=0xE000, mmio_stride=0x10, mmio_size=0x08, mmio_inside_ram=False,
+    code_base=0x0000, reset_pc=0x0000, stack_top=0xBFFF,
+)
+
+_LAYOUTS = {"legacy": LEGACY, "circuit": CIRCUIT_COMPAT,
+            "circuit_compat": CIRCUIT_COMPAT, "game16": GAME16}
+
+
+def get_memory_layout(mode: "str | None" = None) -> MemoryLayout:
+    """Return a named MemoryLayout. Default / unknown -> ``circuit_compat``.
+
+    ``None`` / ``"circuit"`` / ``"circuit_compat"`` -> circuit_compat; ``"legacy"`` ->
+    legacy; ``"game16"`` -> game16. An unknown name safely falls back to
+    circuit_compat (the current default) rather than raising.
+    """
+    if mode is None:
+        return CIRCUIT_COMPAT
+    return _LAYOUTS.get(mode, CIRCUIT_COMPAT)
+
+
+# Canonical memory-map constants (mirrored by ui.win which imports them). Derived
+# from the layouts so there is a single source; values are unchanged.
+RAM_BASE         = CIRCUIT_COMPAT.ram_base    # 0x0000
+UART_BASE        = CIRCUIT_COMPAT.mmio_base   # 0x0100
+UART_SIZE        = CIRCUIT_COMPAT.mmio_size   # 0x0008
+CIRCUIT_RAM_SIZE = CIRCUIT_COMPAT.ram_size    # 0x10000 (64 KB)
+LEGACY_RAM_SIZE  = LEGACY.ram_size            # 0x0100 (256 bytes)
 
 # part_id -> device kind (the single source of truth; category is only a fallback).
 _KIND_BY_PART_ID = {
@@ -102,25 +171,17 @@ def is_runtime_backed_kind(kind: str) -> bool:
     return kind in _RUNTIME_BACKED
 
 
-def _base_size(kind: str, mode: str):
+def _base_size(kind: str, layout: MemoryLayout):
     if kind == "ram":
-        return RAM_BASE, (CIRCUIT_RAM_SIZE if mode == "circuit" else LEGACY_RAM_SIZE)
+        return layout.ram_base, layout.ram_size
     if kind == "uart":
-        return UART_BASE, UART_SIZE
+        return layout.mmio_base, layout.mmio_size
     return None, None
 
 
-def make_device_spec(node_id: "str | None", part: "dict | None",
-                     *, mode: str = "circuit") -> dict:
-    """Build a device spec for a placed node + part.
-
-    Intrinsic fields (kind/role/addressable/runtime_backed/runtime_id/base/size) are
-    set here; the Address Map's carved ``attach_ranges`` are computed later by
-    ``core.circuit.build_address_map_from_devices`` once all devices are known.
-    """
-    kind        = device_kind(part)
-    base, size  = _base_size(kind, mode)
-    end         = (base + size - 1) if (base is not None and size) else None
+def _spec(node_id, part, kind, layout: MemoryLayout) -> dict:
+    base, size = _base_size(kind, layout)
+    end = (base + size - 1) if (base is not None and size) else None
     return {
         "node_id":        node_id,
         "part_id":        (part or {}).get("id"),
@@ -141,41 +202,42 @@ def make_device_spec(node_id: "str | None", part: "dict | None",
     }
 
 
+def make_device_spec(node_id: "str | None", part: "dict | None",
+                     *, mode: str = "circuit",
+                     layout: "MemoryLayout | None" = None) -> dict:
+    """Build a device spec for a placed node + part.
+
+    Intrinsic fields (kind/role/addressable/runtime_backed/runtime_id/base/size) are
+    set here; base/size come from the *layout* (defaults to the layout for *mode* —
+    circuit_compat / legacy, i.e. current values). The Address Map's carved
+    ``attach_ranges`` are computed later by
+    ``core.circuit.build_address_map_from_devices`` once all devices are known.
+    """
+    layout = layout or get_memory_layout(mode)
+    return _spec(node_id, part, device_kind(part), layout)
+
+
 def synthetic_spec(kind: str, *, mode: str = "circuit",
-                   node_id: "str | None" = None) -> dict:
+                   node_id: "str | None" = None,
+                   layout: "MemoryLayout | None" = None) -> dict:
     """A spec for the fixed/legacy circuit where no canvas part exists."""
-    base, size = _base_size(kind, mode)
-    end = (base + size - 1) if (base is not None and size) else None
-    return {
-        "node_id":        node_id,
-        "part_id":        None,
-        "category":       None,
-        "kind":           kind,
-        "role":           device_role(kind),
-        "addressable":    is_addressable_kind(kind),
-        "runtime_backed": is_runtime_backed_kind(kind),
-        "runtime_id":     _RUNTIME_ID.get(kind),
-        "label":          _LABEL_BY_KIND.get(kind, kind.upper()),
-        "base":           base,
-        "size":           size,
-        "end":            end,
-        "attach_ranges":  [(base, end)] if end is not None else [],
-        "reserved":       [],
-        "overlay":        None,
-        "part":           None,
-    }
+    layout = layout or get_memory_layout(mode)
+    return _spec(node_id, None, kind, layout)
 
 
-def legacy_device_specs() -> list:
+def legacy_device_specs(layout: "MemoryLayout | None" = None) -> list:
     """The fixed legacy circuit (no CPU on canvas): CPU + 256B RAM + UART @0x0100."""
-    return [synthetic_spec("cpu", mode="legacy"),
-            synthetic_spec("ram", mode="legacy"),
-            synthetic_spec("uart", mode="legacy")]
+    layout = layout or LEGACY
+    return [synthetic_spec("cpu", node_id=None, layout=layout),
+            synthetic_spec("ram", node_id=None, layout=layout),
+            synthetic_spec("uart", node_id=None, layout=layout)]
 
 
-def build_device_specs(nodes: list, *, mode: str = "circuit") -> list:
+def build_device_specs(nodes: list, *, mode: str = "circuit",
+                       layout: "MemoryLayout | None" = None) -> list:
     """Build device specs for a list of ``{"node_id", "part"}`` entries."""
-    return [make_device_spec(n.get("node_id"), n.get("part"), mode=mode)
+    layout = layout or get_memory_layout(mode)
+    return [make_device_spec(n.get("node_id"), n.get("part"), layout=layout)
             for n in (nodes or [])]
 
 
@@ -186,24 +248,27 @@ def build_device_specs(nodes: list, *, mode: str = "circuit") -> list:
 MULTI_RAM_UNSUPPORTED = "MULTI_RAM_UNSUPPORTED"
 
 
-def assign_mmio_bases(specs: list) -> list:
+def assign_mmio_bases(specs: list, *, layout: "MemoryLayout | None" = None) -> list:
     """Auto-place MMIO windows (UART etc.) for an Address Map. Returns new specs.
 
-    The **first** MMIO device keeps the canonical UART window (``0x0100``, 8 B) and
-    stays runtime-backed (``runtime_id`` ``sim_uart``). Subsequent MMIO devices are
-    placed at ``0x0110``, ``0x0120`` … (16-byte stride, 8-byte size); they are
-    Address-Map placed / diagnosed only and are **not** runtime-backed in this patch
-    (so a single UART is unchanged). Memory / CPU specs are returned unchanged.
+    The **first** MMIO device keeps the canonical UART window
+    (``layout.mmio_base``, ``layout.mmio_size``) and stays runtime-backed
+    (``runtime_id`` ``sim_uart``). Subsequent MMIO devices are placed at
+    ``mmio_base + n*mmio_stride`` (default 0x0110, 0x0120 …); they are Address-Map
+    placed / diagnosed only and are **not** runtime-backed in this patch (so a
+    single UART is unchanged). Memory / CPU specs are returned unchanged. Default
+    layout (circuit_compat) reproduces the current 0x0100 / 0x0110 placement.
     """
+    layout = layout or get_memory_layout()
     out: list = []
     n = 0
     for s in specs:
         s = dict(s)
         if s.get("addressable") and s.get("role") == "mmio":
-            base = UART_BASE + n * 0x10
+            base = layout.mmio_base + n * layout.mmio_stride
             s["base"] = base
-            s["size"] = UART_SIZE
-            s["end"]  = base + UART_SIZE - 1
+            s["size"] = layout.mmio_size
+            s["end"]  = base + layout.mmio_size - 1
             s["attach_ranges"] = [(base, s["end"])]
             if n > 0:
                 # extra MMIO windows are placed/diagnosed only (no runtime Part yet)

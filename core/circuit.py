@@ -12,7 +12,7 @@ strict bus protocols are out of scope here (see PATCH_VIRTUAL_CIRCUIT_RUNTIME_V0
 """
 from __future__ import annotations
 
-from core.devices import device_kind
+from core.devices import device_kind, get_memory_layout
 
 
 def _node_kind(node: dict) -> str:
@@ -149,17 +149,22 @@ def resolve_circuit(nodes: list[dict], connections: list[dict],
 _MEMORY_KINDS = ("ram", "vram", "rom")
 
 
-def build_address_map_from_devices(mode, device_specs) -> dict:
+def build_address_map_from_devices(mode, device_specs, *, layout=None) -> dict:
     """Build an Address Map from a list of *addressable* device specs.
 
     Each spec needs ``kind`` / ``base`` / ``size`` (+ optional ``node_id`` /
     ``device_id`` or ``runtime_id`` / ``label``). Memory-kind devices (ram/vram/rom)
-    act as containers; a non-memory device that falls strictly inside a memory
-    device becomes a carved-out MMIO overlay window (the memory device is attached
-    around it). This generalises the RAM + UART carving of the legacy
-    ``build_address_map()`` (PATCH_DEVICE_REGISTRY_REFACTOR_V08); for the 1-memory +
-    1-window case the output is identical.
+    act as containers; when ``layout.mmio_inside_ram`` is True a non-memory device
+    that falls strictly inside a memory device becomes a carved-out MMIO overlay
+    window (the memory device is attached around it). When False, RAM and MMIO are
+    treated as non-overlapping regions (no carving — future game16-style layouts).
+
+    ``layout`` defaults to the layout for *mode* (circuit_compat / legacy), so the
+    output is unchanged from before (PATCH_CODE_REGION_MMIO_RELOCATION_V08); for the
+    1-memory + 1-window case it matches the legacy ``build_address_map()`` exactly.
     """
+    layout = layout or get_memory_layout(mode)
+    overlay_ok = bool(layout.mmio_inside_ram)
     specs = [s for s in (device_specs or []) if s.get("addressable", True)]
     mem = [s for s in specs if s.get("kind") in _MEMORY_KINDS]
 
@@ -184,7 +189,7 @@ def build_address_map_from_devices(mode, device_specs) -> dict:
                     continue
                 w_end = w["base"] + w["size"] - 1
                 inside = (s["base"] <= w["base"]) and (w_end <= end)
-                if inside and (w["base"] > s["base"] or w_end < end):
+                if overlay_ok and inside and (w["base"] > s["base"] or w_end < end):
                     windows.append((w["base"], w_end))
             windows.sort()
             ranges, cursor = [], s["base"]
@@ -203,11 +208,12 @@ def build_address_map_from_devices(mode, device_specs) -> dict:
             devices.append(dev)
         else:
             inside_kind = None
-            for m in mem:
-                m_end = m["base"] + m["size"] - 1
-                if (m["base"] <= s["base"]) and (end <= m_end):
-                    inside_kind = m.get("kind")
-                    break
+            if overlay_ok:
+                for m in mem:
+                    m_end = m["base"] + m["size"] - 1
+                    if (m["base"] <= s["base"]) and (end <= m_end):
+                        inside_kind = m.get("kind")
+                        break
             dev = _common(s, end)
             dev["role"] = "mmio" if inside_kind else "io"
             dev["attach_ranges"] = [(s["base"], end)]

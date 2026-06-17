@@ -48,7 +48,12 @@
   - `python -m pytest tests/` → **973 passed**（957 + 新規 16）
   - 次候補: `PATCH_ADDRESS_MAP_EDITOR_V08` または `PATCH_CODE_REGION_MMIO_RELOCATION_V08`
 * [x] 次候補 `PATCH_CODE_REGION_MMIO_RELOCATION_V08` の設計資料を作成した（2026-06-17）
-  - `PATCH_CODE_REGION_MMIO_RELOCATION_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・`MemoryLayout`（legacy/circuit_compat/game16 案）土台・既定は現行互換**
+  - `PATCH_CODE_REGION_MMIO_RELOCATION_V08_ROADMAP.md` / `..._CHECKLIST.md`
+* [x] `PATCH_CODE_REGION_MMIO_RELOCATION_V08` 実装完了（2026-06-17・**既定は現行互換**）
+  - `core/devices.py` に `MemoryLayout`（LEGACY/CIRCUIT_COMPAT 既定/GAME16 design-only）+ `get_memory_layout` / `make_device_spec`・`assign_mmio_bases`・`build_address_map_from_devices`・`_make_sim` を layout aware に / `reset_pc` を layout 由来
+  - 既定 = circuit_compat = 現行（Address Map dict・UART 0x0100・RAM 64KB・reset_pc 0x0000 不変）
+  - `python -m pytest tests/` → **988 passed**（973 + 新規 15）
+  - 次候補: `PATCH_ADDRESS_MAP_EDITOR_V08` または `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08`
 * [ ] v0.8 テーマを確定する（候補: Device Expansion & Connection Validation）
   - 完了条件: ユーザーがテーマと最初のパッチを決定する
 * [ ] 最初のパッチ（`PATCH_PORT_SCHEMA_V08` 想定）の実装範囲をユーザーが承認する
