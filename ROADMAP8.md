@@ -50,9 +50,10 @@ v0.8 は、この実行基盤の上で **接続の妥当性検証** と **デバ
 ### C. 複数 RAM / UART handling
 - 現状は単一前提。複数 RAM/UART を Address Map 上で共存させる。
 - target CPU から見た複数スレーブのアドレス割当・選択。
-- **前段として `PATCH_DEVICE_REGISTRY_REFACTOR_V08` を検討中**（`PATCH_BUS_PROTOCOL_VALIDATION_V08`
-  の次）。実行デバイス生成・Address Map を **device list driven** に整理してから複数対応へ進む方針
-  （挙動不変・VRAM≠RAM の土台）。設計資料: `PATCH_DEVICE_REGISTRY_REFACTOR_V08_ROADMAP.md` /
+- **前段の `PATCH_DEVICE_REGISTRY_REFACTOR_V08` は実装完了**（device list driven・VRAM≠RAM 土台）。
+  次候補は `PATCH_MULTI_RAM_UART_ADDRESS_MAP_V08`（複数 UART/MMIO の Address Map 配置・複数 RAM 検出+warning・
+  `resolve_circuit` を device_kind ベースへ＝VRAM 誤認の本修正）。複数 RAM の真の共存は 16bit 制約のため
+  `PATCH_CODE_REGION_MMIO_RELOCATION_V08` へ送る。設計資料: `PATCH_MULTI_RAM_UART_ADDRESS_MAP_V08_ROADMAP.md` /
   `..._CHECKLIST.md`（実装は未着手）。
 
 ### D. ROM / VRAM / Storage / Input device expansion

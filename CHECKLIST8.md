@@ -40,6 +40,8 @@
   - `mem.vram` を part_id ベースで分類し RAM 化しない土台
   - `python -m pytest tests/` → **957 passed**（937 + 新規 20）
   - 次候補: `PATCH_MULTI_RAM_UART_ADDRESS_MAP_V08`
+* [x] 次候補 `PATCH_MULTI_RAM_UART_ADDRESS_MAP_V08` の設計資料を作成した（2026-06-17）
+  - `PATCH_MULTI_RAM_UART_ADDRESS_MAP_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・複数 UART/MMIO 配置 + 複数 RAM 検出/warning + resolve_circuit を device_kind 化（VRAM 誤認本修正）**
 * [ ] v0.8 テーマを確定する（候補: Device Expansion & Connection Validation）
   - 完了条件: ユーザーがテーマと最初のパッチを決定する
 * [ ] 最初のパッチ（`PATCH_PORT_SCHEMA_V08` 想定）の実装範囲をユーザーが承認する
