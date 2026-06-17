@@ -54,6 +54,8 @@
   - 既定 = circuit_compat = 現行（Address Map dict・UART 0x0100・RAM 64KB・reset_pc 0x0000 不変）
   - `python -m pytest tests/` → **988 passed**（973 + 新規 15）
   - 次候補: `PATCH_ADDRESS_MAP_EDITOR_V08` または `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08`
+* [x] 次候補 `PATCH_ADDRESS_MAP_EDITOR_V08` の設計資料を作成した（2026-06-18）
+  - `PATCH_ADDRESS_MAP_EDITOR_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・GUI で per-device base/size override（auto/manual・Reset to Auto・validation）・既定は現行互換**
 * [ ] v0.8 テーマを確定する（候補: Device Expansion & Connection Validation）
   - 完了条件: ユーザーがテーマと最初のパッチを決定する
 * [ ] 最初のパッチ（`PATCH_PORT_SCHEMA_V08` 想定）の実装範囲をユーザーが承認する

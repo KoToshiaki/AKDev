@@ -63,6 +63,10 @@ v0.8 は、この実行基盤の上で **接続の妥当性検証** と **デバ
 ### E. Address Map Editor
 - ユーザーによる base/size の任意編集 UI（v0.7 は固定既定）。
 - overlap 検出（既存）と連動した編集時バリデーション。
+- **次候補として `PATCH_ADDRESS_MAP_EDITOR_V08` を検討中**（`PATCH_CODE_REGION_MMIO_RELOCATION_V08`
+  の次）。`MemoryLayout` の自動配置の上に、GUI で per-device `base`/`size` override（auto/manual・
+  Reset to Auto・編集時 validation）を載せる。**既定（override 無し）は現行互換**。
+  設計資料: `PATCH_ADDRESS_MAP_EDITOR_V08_ROADMAP.md` / `..._CHECKLIST.md`（実装は未着手）。
 
 ### F. コード領域の拡張設計 / UART MMIO 窓の再配置・可変化
 - 現状コードは 0x0000 開始・UART 窓 0x0100–0x0107 固定。
