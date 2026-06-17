@@ -107,16 +107,19 @@
 
 # 6. Run Status Panel（PATCH_RUN_STATUS_PANEL_V07）
 
-* [ ] Run Status パネルを新設する（Debug タブに集約）
-* [ ] 実行対象 CPU を表示する
-* [ ] 接続 RAM / UART を表示する
-* [ ] loaded program を表示する
-* [ ] PC / cycle / halted を表示する
-* [ ] trace summary を表示する
-* [ ] UART output を表示する
-* [ ] Run/Step 後にパネルが更新される
-* [ ] テストを追加する（パネル生成 / 状態反映 / 更新）
-* [ ] `pytest tests/` 全通過
+* [x] Run Status パネルを新設する（Debug タブに集約）
+  - `ui/run_status.py` `RunStatusPanel`、右側 Dock（Register View とタブ化）、Debug リボン登録
+* [x] 実行対象 CPU を表示する（mode / target CPU）
+* [x] 接続 RAM / UART を表示する
+* [x] loaded program を表示する（loaded / path / target / source type / status / size）
+* [x] PC / cycle / halted を表示する（+ step count）
+* [x] trace summary を表示する（mem / io / register changes / last instruction / PC before→after）
+* [x] UART output を表示する（summary）
+* [x] Run/Step 後にパネルが更新される（+ Write / Build / Reset / 起動時）
+* [x] テストを追加する（パネル生成 / 状態反映 / 更新）
+  - `tests/test_run_status_panel_v07.py`（13 件）
+* [x] `pytest tests/` 全通過
+  - 2026-06-17 確認: **842 passed**（8.22s）
 
 ---
 

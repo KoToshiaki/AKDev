@@ -29,6 +29,7 @@ from ui.lib import load_parts, cat_label
 from ui.memview import MemoryViewer
 from ui.prop import PropPanel
 from ui.ribbon import RibbonBar
+from ui.run_status import RunStatusPanel
 
 # Minimal simulation memory map (kept within 16-bit immediate range for LDI).
 _SIM_RAM_BASE  = 0x0000
@@ -78,6 +79,7 @@ class MainWin(QMainWindow):
         self._setup_parts_lib()
         self._setup_properties()     # creates self._prop_panel, self._props_dock
         self._setup_register_view()  # Register View (tabified with Properties)
+        self._setup_run_status()     # Run Status Panel (tabified with Register View)
         self._canvas.selection_changed.connect(self._on_canvas_selection)
         self._canvas.tab_open_requested.connect(self._on_open_tab)
         self._canvas.wire_selected.connect(self._on_wire_selected)
@@ -87,6 +89,7 @@ class MainWin(QMainWindow):
         self._setup_menu()           # creates self._a_new/_a_open/_a_save/etc.
         self._setup_toolbar()        # reuses those actions
         self._update_register_view() # populate with initial CPU state
+        self._update_run_status()    # populate Run Status Panel with initial state
         self._arrange_initial_layout()  # lead with Log / Properties (Canvas主役)
 
     # ------------------------------------------------------------------ layout
@@ -559,6 +562,76 @@ class MainWin(QMainWindow):
         self.addDockWidget(Qt.RightDockWidgetArea, dock)
         self.tabifyDockWidget(self._props_dock, dock)
 
+    def _setup_run_status(self):
+        """Run Status Panel — read-only execution summary (PATCH_RUN_STATUS_PANEL_V07)."""
+        self._run_status = RunStatusPanel(self)
+        self.addDockWidget(Qt.RightDockWidgetArea, self._run_status)
+        self.tabifyDockWidget(self._reg_view_dock, self._run_status)
+
+    # ------------------------------------------- run status (PATCH_RUN_STATUS_PANEL_V07)
+
+    def _collect_run_status(self) -> dict:
+        """Build a snapshot dict of the current execution state from existing state.
+
+        Reads the resolved CircuitPlan, the runtime, the sim devices and the
+        Address Map — it adds no new state. Safe in legacy / ambiguous / unwired /
+        unloaded situations (every lookup is defensive).
+        """
+        try:
+            plan = self._resolve_circuit_plan()
+        except Exception:
+            plan = {"cpu_present": False, "target_cpu": None,
+                    "rams": [], "uarts": [], "issues": []}
+        mode = "circuit" if plan.get("cpu_present") else "legacy"
+
+        # Device description depends on the mode.
+        if mode == "circuit":
+            rams  = plan.get("rams") or []
+            uarts = plan.get("uarts") or []
+            ram_desc  = ", ".join(rams) if rams else "(none connected)"
+            uart_desc = ", ".join(uarts) if uarts else "(none connected)"
+        else:
+            ram_desc  = f"sim_ram ({self._sim_ram.size}B)"
+            uart_desc = f"sim_uart (0x{_SIM_UART_BASE:04x})"
+
+        # Combine the win-level loaded_program with the runtime's loaded_program.
+        lp    = self._loaded_program or {}
+        rt_lp = self._runtime.loaded_program or {}
+        program = None
+        if self._runtime.loaded or lp or rt_lp:
+            program = {
+                "source_type":    lp.get("source_type"),
+                "path":           lp.get("path") or rt_lp.get("source_name"),
+                "target_node_id": lp.get("target_node_id") or rt_lp.get("target_node_id"),
+                "status":         lp.get("status"),
+                "size":           rt_lp.get("size"),
+            }
+
+        amap = self._runtime.address_map or self.address_map()
+        amap_lines  = format_address_map_summary(amap) if amap else []
+        amap_issues = validate_address_map(amap) if amap else []
+
+        return {
+            "mode":        mode,
+            "target_cpu":  plan.get("target_cpu"),
+            "ram_desc":    ram_desc,
+            "uart_desc":   uart_desc,
+            "issues":      plan.get("issues") or [],
+            "program":     program,
+            "pc":          self._sim_cpu.pc(),
+            "cycle":       self._sim_cycle,
+            "halted":      self._sim_cpu.halted(),
+            "step_count":  self._runtime.step_count,
+            "last_trace":  self._runtime.last_trace,
+            "address_map_lines":  amap_lines,
+            "address_map_issues": amap_issues,
+            "uart_out":    self._sim_uart.output_text(),
+        }
+
+    def _update_run_status(self) -> None:
+        """Refresh the Run Status Panel from the current execution state."""
+        self._run_status.update_status(self._collect_run_status())
+
     def _on_canvas_selection(self, nodes: list):
         if not nodes:
             # Keep the Wire view if a wire is selected (node selection was cleared
@@ -832,6 +905,7 @@ class MainWin(QMainWindow):
         self._update_memory_viewer()
         self._editor_tabs.clear_highlight()
         self._canvas.clear_signal_overlay()
+        self._update_run_status()
         return True
 
     # ------------------------------------- write program to circuit (PATCH_CIRCUIT_WRITE_RUN_HELLO_V05)
@@ -892,6 +966,7 @@ class MainWin(QMainWindow):
             self._runtime.loaded_program["target_node_id"] = node_id
         self._log.append(f"Program written to circuit: {node_id} <- {rel}")
         self._refresh_node_properties(node_id)
+        self._update_run_status()
         return True
 
     def loaded_program(self) -> "dict | None":
@@ -954,6 +1029,7 @@ class MainWin(QMainWindow):
         self._update_memory_viewer()
         self._update_pc_highlight()
         self._update_signal_overlay()
+        self._update_run_status()
 
     def _log_step_trace(self, trace: dict) -> None:
         """Emit a detailed one-instruction trace to the Log (UI trace 導線)."""
@@ -994,6 +1070,7 @@ class MainWin(QMainWindow):
         self._update_memory_viewer()
         self._editor_tabs.clear_highlight()
         self._canvas.clear_signal_overlay()
+        self._update_run_status()
 
     def _do_step(self):
         """Execute one instruction on the virtual CPU and trace it."""
@@ -1200,6 +1277,7 @@ class MainWin(QMainWindow):
             self._props_dock.toggleViewAction(),
         ])
         self._ribbon.add_page("Debug", [           # I: Log and Console separated
+            self._run_status.toggleViewAction(),
             self._reg_view_dock.toggleViewAction(),
             self._mem_viewer.toggleViewAction(),
             self._bus_trace_dock.toggleViewAction(),
