@@ -68,6 +68,8 @@
   - CPU は既存 `LD` で Input を読む（`IN` 命令不要）。UART+Input で UART 0x0100 / Input 0x0110・両 backed
   - `python -m pytest tests/` → **1034 passed**（1011 + 新規 23）
   - 次候補: `PATCH_ROM_DEVICE_V08` または `PATCH_AK32_INSTRUCTION_EXPANSION_V08`
+* [x] 次候補 `PATCH_ROM_DEVICE_V08` の設計資料を作成した（2026-06-18）
+  - `PATCH_ROM_DEVICE_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・ROM 単独（read-only memory・`sim_rom`）・既定 circuit_compat は RAM ロード維持・ROM 配置は game16 / Editor override・Program loader は RAM のまま（ROM target 化は後続）・ROM 非配置は現行互換**
 * [x] 次候補 `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08` の設計資料を作成した（2026-06-18）
   - `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・ROM/Input 優先（Input は LD で読め IN 命令不要）・VRAM/Storage は後続・新 device 無しは現行互換・分割案（INPUT 先行 → ROM）あり**
 * [ ] v0.8 テーマを確定する（候補: Device Expansion & Connection Validation）
