@@ -177,3 +177,61 @@ def build_device_specs(nodes: list, *, mode: str = "circuit") -> list:
     """Build device specs for a list of ``{"node_id", "part"}`` entries."""
     return [make_device_spec(n.get("node_id"), n.get("part"), mode=mode)
             for n in (nodes or [])]
+
+
+# ---------------------------------------------------------------------------
+# Multiple MMIO / RAM handling (PATCH_MULTI_RAM_UART_ADDRESS_MAP_V08)
+# ---------------------------------------------------------------------------
+
+MULTI_RAM_UNSUPPORTED = "MULTI_RAM_UNSUPPORTED"
+
+
+def assign_mmio_bases(specs: list) -> list:
+    """Auto-place MMIO windows (UART etc.) for an Address Map. Returns new specs.
+
+    The **first** MMIO device keeps the canonical UART window (``0x0100``, 8 B) and
+    stays runtime-backed (``runtime_id`` ``sim_uart``). Subsequent MMIO devices are
+    placed at ``0x0110``, ``0x0120`` … (16-byte stride, 8-byte size); they are
+    Address-Map placed / diagnosed only and are **not** runtime-backed in this patch
+    (so a single UART is unchanged). Memory / CPU specs are returned unchanged.
+    """
+    out: list = []
+    n = 0
+    for s in specs:
+        s = dict(s)
+        if s.get("addressable") and s.get("role") == "mmio":
+            base = UART_BASE + n * 0x10
+            s["base"] = base
+            s["size"] = UART_SIZE
+            s["end"]  = base + UART_SIZE - 1
+            s["attach_ranges"] = [(base, s["end"])]
+            if n > 0:
+                # extra MMIO windows are placed/diagnosed only (no runtime Part yet)
+                s["runtime_backed"] = False
+                s["runtime_id"]     = None
+                s["device_id"]      = f"mmio_{s.get('node_id') or n}"
+            n += 1
+        out.append(s)
+    return out
+
+
+def multi_device_warnings(specs: list) -> list:
+    """Warn (issue dicts) about device configurations not fully supported yet.
+
+    Currently: more than one RAM. Only the first RAM is runtime-backed and
+    address-mapped (16-bit / 64 KB space — true multi-RAM co-location needs RAM
+    resizing / MMIO relocation, deferred to later patches). Issue shape matches
+    core.port_validation / core.bus_validation.
+    """
+    issues: list = []
+    rams = [s for s in (specs or []) if s.get("kind") == "ram"]
+    if len(rams) > 1:
+        issues.append({
+            "severity": "warning",
+            "code": MULTI_RAM_UNSUPPORTED,
+            "message": (f"Multiple RAM devices ({len(rams)}); only the first is "
+                        f"runtime-backed and address-mapped"),
+            "nodes": [s.get("node_id") for s in rams],
+            "details": {"unsupported": [s.get("node_id") for s in rams[1:]]},
+        })
+    return issues

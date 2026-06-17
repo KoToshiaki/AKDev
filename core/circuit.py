@@ -12,20 +12,29 @@ strict bus protocols are out of scope here (see PATCH_VIRTUAL_CIRCUIT_RUNTIME_V0
 """
 from __future__ import annotations
 
+from core.devices import device_kind
+
+
+def _node_kind(node: dict) -> str:
+    """Classify a CircuitPlan node by device kind (part_id based, category fallback).
+
+    PATCH_MULTI_RAM_UART_ADDRESS_MAP_V08: role detection moved off raw ``category``
+    onto ``core.devices.device_kind`` so e.g. ``mem.vram`` (kind ``vram``) is NOT
+    treated as RAM.
+    """
+    return device_kind({"id": node.get("part_id"), "category": node.get("category")})
+
 
 def _is_cpu(node: dict) -> bool:
-    return node.get("category") == "cpu"
+    return _node_kind(node) == "cpu"
 
 
 def _is_ram(node: dict) -> bool:
-    return node.get("category") == "mem"
+    return _node_kind(node) == "ram"
 
 
 def _is_uart(node: dict) -> bool:
-    if node.get("category") != "io":
-        return False
-    tag = (str(node.get("part_id", "")) + " " + str(node.get("name", ""))).lower()
-    return "uart" in tag
+    return _node_kind(node) == "uart"
 
 
 def resolve_circuit(nodes: list[dict], connections: list[dict],
@@ -96,9 +105,11 @@ def resolve_circuit(nodes: list[dict], connections: list[dict],
         }
 
     # Only the target CPU's connectivity matters — an unconnected non-target CPU
-    # must not block the target's execution.
-    conn_rams  = [r["node_id"] for r in rams  if wired(target, r["node_id"])]
-    conn_uarts = [u["node_id"] for u in uarts if wired(target, u["node_id"])]
+    # must not block the target's execution. Sort by node id so the "first" RAM/UART
+    # is deterministic (earliest-placed = primary; PATCH_MULTI_RAM_UART_ADDRESS_MAP_V08)
+    # regardless of canvas scene ordering.
+    conn_rams  = sorted(r["node_id"] for r in rams  if wired(target, r["node_id"]))
+    conn_uarts = sorted(u["node_id"] for u in uarts if wired(target, u["node_id"]))
 
     issues: list[str] = []
     if not rams:

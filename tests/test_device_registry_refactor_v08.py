@@ -268,9 +268,9 @@ def test_legacy_mode_unchanged():
 
 
 def test_vram_not_used_as_ram_runtime(tmp_path):
-    # A circuit whose "RAM" node is actually a VRAM: resolve_circuit still accepts it
-    # (category mem), but the device-spec layer classifies it as vram (not ram), so it
-    # is NOT instantiated as a RamPart.
+    # A circuit whose "RAM" node is actually a VRAM. As of
+    # PATCH_MULTI_RAM_UART_ADDRESS_MAP_V08, resolve_circuit classifies by device_kind,
+    # so a mem.vram node is NOT listed in plan["rams"] (never treated as RAM).
     win, root = _win(tmp_path)
     win._canvas.add_part_at(_CPU,  QPointF(0.0, 0.0))     # node_0001
     win._canvas.add_part_at(_VRAM, QPointF(200.0, 0.0))   # node_0002 (VRAM, not RAM)
@@ -278,8 +278,5 @@ def test_vram_not_used_as_ram_runtime(tmp_path):
     win._canvas.add_connection("node_0001", "bus", "node_0002", "bus")
     win._canvas.add_connection("node_0001", "bus", "node_0003", "bus")
     plan = win._resolve_circuit_plan()
-    mode, specs = win._resolve_device_specs(plan)
-    ram_specs = [s for s in specs if s["kind"] == "ram"]
-    vram_specs = [s for s in specs if s["kind"] == "vram"]
-    assert vram_specs and vram_specs[0]["runtime_backed"] is False
-    assert ram_specs == []                # the vram node is NOT a ram spec
+    assert "node_0002" not in plan["rams"]   # VRAM is not a RAM
+    assert plan["rams"] == []                # the only mem node here is a VRAM

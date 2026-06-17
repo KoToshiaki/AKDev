@@ -18,7 +18,9 @@ from core.circuit import (
     validate_address_map,
     format_address_map_summary,
 )
-from core.devices import make_device_spec, legacy_device_specs
+from core.devices import (
+    make_device_spec, legacy_device_specs, assign_mmio_bases, multi_device_warnings,
+)
 from core.cpu import AK32Part
 from core.dev import RamPart, UartPart
 from core.project import create_project, load_project, load_target, save_system
@@ -192,23 +194,29 @@ class MainWin(QMainWindow):
         """
         circuit = bool(plan and plan.get("cpu") and plan.get("rams") and plan.get("uarts"))
         if not circuit:
-            return "legacy", legacy_device_specs()
-        specs = []
-        for node_id in (plan["cpu"], plan["rams"][0], plan["uarts"][0]):
-            node = self._canvas.get_node(node_id) if node_id else None
-            part = node.part() if node else None
-            specs.append(make_device_spec(node_id, part, mode="circuit"))
-        return "circuit", specs
+            return "legacy", assign_mmio_bases(legacy_device_specs())
+        # PATCH_MULTI_RAM_UART_ADDRESS_MAP_V08: spec ALL resolved RAM/UART nodes (not
+        # just the first), then auto-place MMIO windows (UART1=0x0100, UART2=0x0110…).
+        specs = [make_device_spec(plan["cpu"], self._part_of(plan["cpu"]), mode="circuit")]
+        for node_id in plan["rams"]:
+            specs.append(make_device_spec(node_id, self._part_of(node_id), mode="circuit"))
+        for node_id in plan["uarts"]:
+            specs.append(make_device_spec(node_id, self._part_of(node_id), mode="circuit"))
+        return "circuit", assign_mmio_bases(specs)
+
+    def _part_of(self, node_id):
+        node = self._canvas.get_node(node_id) if node_id else None
+        return node.part() if node else None
 
     def _build_runtime_devices(self, plan, mode, specs):
         """Instantiate runtime Parts from device specs and bind the runtime.
 
-        Only ``runtime_backed`` kinds (cpu/ram/uart) are instantiated today; their
-        ``runtime_id`` (sim_cpu/sim_ram/sim_uart) is kept stable for bus tracing,
-        the signal overlay and the runtime's UART detection. A ``vram`` (or other
-        non-backed) spec is classified but NOT turned into a RamPart. Multiple
-        RAM/UART are not handled here — only the resolved first RAM/UART/CPU become
-        runtime devices (full support: PATCH_MULTI_RAM_UART_ADDRESS_MAP_V08).
+        Only ``runtime_backed`` kinds (cpu/ram/uart) are instantiated, and only the
+        FIRST of each kind — their ``runtime_id`` (sim_cpu/sim_ram/sim_uart) is kept
+        stable for bus tracing, the signal overlay and the runtime's UART detection.
+        A ``vram`` / extra-UART / extra-RAM spec is classified + (for UART) placed on
+        the Address Map, but NOT turned into a runtime Part this patch
+        (PATCH_MULTI_RAM_UART_ADDRESS_MAP_V08; full multi-device runtime is later).
         """
         self._sim_ram = self._sim_uart = self._sim_cpu = None
         self._sim_ram_node = self._sim_uart_node = self._sim_cpu_node = None
@@ -228,11 +236,20 @@ class MainWin(QMainWindow):
                                          reset_pc=_SIM_RAM_BASE)
                 self._sim_cpu_node = spec["node_id"]
 
-        # Address Map from the addressable specs (RAM/UART), then attach each device
-        # to the bus exactly per its attach ranges (UART carved out of RAM).
-        amap = build_address_map_from_devices(
-            mode, [s for s in specs if s.get("addressable")]
-        )
+        # Address Map from the addressable specs: the first RAM (memory container) +
+        # all MMIO windows (UARTs). 2nd+ RAM is NOT placed (16-bit space; warned via
+        # multi_device_warnings). The map carves the RAM around every MMIO window.
+        addr_specs, seen_ram = [], False
+        for s in specs:
+            if not s.get("addressable"):
+                continue
+            if s["kind"] == "ram":
+                if seen_ram:
+                    continue
+                seen_ram = True
+            addr_specs.append(s)
+        amap = build_address_map_from_devices(mode, addr_specs)
+
         parts_by_id = {}
         if self._sim_ram is not None:
             parts_by_id["sim_ram"] = self._sim_ram
@@ -241,7 +258,7 @@ class MainWin(QMainWindow):
         for dev in amap["devices"]:
             part = parts_by_id.get(dev.get("device_id"))
             if part is None:
-                continue
+                continue   # extra MMIO windows are placed/diagnosed only (no Part)
             for lo, hi in dev["attach_ranges"]:
                 self._sim_bus.attach(part, lo, hi - lo + 1)
 
@@ -252,6 +269,9 @@ class MainWin(QMainWindow):
         )
         self._runtime.plan = plan
         self._runtime.address_map = amap   # PATCH_ADDRESS_MAP_V07
+        # Diagnostics (warning only): unsupported multi-device configs (e.g. >1 RAM).
+        for w in multi_device_warnings(specs):
+            self._log.append(f"Address Map warning: {w['code']} — {w.get('message')}")
 
     def address_map(self) -> "dict | None":
         """Return the current Address Map (device layout on the bus)."""
