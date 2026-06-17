@@ -67,6 +67,10 @@ v0.8 は、この実行基盤の上で **接続の妥当性検証** と **デバ
 ### F. コード領域の拡張設計 / UART MMIO 窓の再配置・可変化
 - 現状コードは 0x0000 開始・UART 窓 0x0100–0x0107 固定。
 - 大きめプログラム/ゲーム向けにコード領域・MMIO 配置を見直す。
+- **次候補として `PATCH_CODE_REGION_MMIO_RELOCATION_V08` を検討中**（`PATCH_MULTI_RAM_UART_ADDRESS_MAP_V08`
+  の次）。`MemoryLayout`（legacy / circuit_compat 既定 / game16 案）を整理し、RAM base/size・MMIO base を
+  可変化する土台を作る（**既定は現行互換**・MMIO 実再配置や ROM 化は段階導入）。
+  設計資料: `PATCH_CODE_REGION_MMIO_RELOCATION_V08_ROADMAP.md` / `..._CHECKLIST.md`（実装は未着手）。
 
 ### G. CPU 命令拡張
 - CALL / RET / IN 等（スタック設計が必要）。
