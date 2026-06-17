@@ -115,8 +115,9 @@ def build_node_info(canvas, node_id: str) -> dict:
         "logical_ports": logical,
         "visual_ports":  visual,
         "connections":   connections,
-        # PATCH_PORT_DIRECTION_WIDTH_VALIDATION_V08: issues of all connections here.
-        "validation":    canvas.node_validation_issues(node_id),
+        # Port-pair issues (V08 validation) + bus-group issues (V08 bus protocol).
+        "validation":    (canvas.node_validation_issues(node_id)
+                          + canvas.node_bus_validation_issues(node_id)),
     }
 
 
@@ -143,8 +144,9 @@ def build_wire_info(canvas, conn_id: str) -> dict:
         "from_vp":   frm.get("visual_port_id"),
         "to_vp":     to.get("visual_port_id"),
         "style":     c.get("style"),
-        # PATCH_PORT_DIRECTION_WIDTH_VALIDATION_V08: this connection's issues.
-        "validation": canvas.connection_validation(conn_id),
+        # Port-pair issues (V08 validation) + bus-group issues (V08 bus protocol).
+        "validation": (canvas.connection_validation(conn_id)
+                       + canvas.connection_bus_validation_issues(conn_id)),
     }
 
 
@@ -160,9 +162,14 @@ def _render_validation(issues: "list | None") -> list:
         lines.append("  OK")
         return lines
     for i in issues:
-        sev    = str(i.get("severity", "warning")).upper()
-        conn   = f" ({i['conn_id']})" if i.get("conn_id") else ""
-        lines.append(f"  {sev} {i.get('code')}: {i.get('message')}{conn}")
+        sev = str(i.get("severity", "warning")).upper()
+        if i.get("conn_id"):
+            loc = f" ({i['conn_id']})"
+        elif i.get("group_id"):
+            loc = f" ({i['group_id']})"
+        else:
+            loc = ""
+        lines.append(f"  {sev} {i.get('code')}: {i.get('message')}{loc}")
     return lines
 
 

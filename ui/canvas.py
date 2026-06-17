@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (QGraphicsEllipseItem, QGraphicsItem,
                                 QGraphicsScene, QGraphicsView, QMenu)
 
 from core.port_validation import validate_connection
+from core.bus_validation import validate_bus_protocol
 
 
 _NODE_W = 140
@@ -1590,6 +1591,10 @@ class Canvas(QGraphicsView):
                 f"{issue.get('from_node')}:{issue.get('from_port')} -> "
                 f"{issue.get('to_node')}:{issue.get('to_port')}"
             )
+        # PATCH_BUS_PROTOCOL_VALIDATION_V08: group-level diagnostics for this edge
+        # (warning only; the connection is never blocked).
+        for issue in self.connection_bus_validation_issues(conn["id"]):
+            self._log(f"Bus validation warning: {issue['code']} {issue.get('group_id')}")
         self.connections_changed.emit()
         return conn
 
@@ -1624,6 +1629,26 @@ class Canvas(QGraphicsView):
         for c in self.node_connections(node_id):
             out.extend(self.connection_validation(c.get("id")))
         return out
+
+    # ------------------------------------- bus protocol validation (PATCH_BUS_PROTOCOL_VALIDATION_V08)
+
+    def bus_validation(self) -> list:
+        """Run warning-only bus-group diagnostics over the whole canvas (read-only).
+
+        Group-level (not per-connection): bus ports joined by bus edges form bus
+        groups, each checked for master/slave counts. Never blocks anything.
+        """
+        nodes = [{"node_id": n.node_id(), "part": n.part()}
+                 for n in self.get_all_nodes()]
+        return validate_bus_protocol(nodes, self._connections)
+
+    def node_bus_validation_issues(self, node_id: str) -> list:
+        """Bus-group issues for groups that include *node_id*."""
+        return [i for i in self.bus_validation() if node_id in i.get("nodes", [])]
+
+    def connection_bus_validation_issues(self, conn_id: str) -> list:
+        """Bus-group issues for the group that contains *conn_id* (bus edge)."""
+        return [i for i in self.bus_validation() if conn_id in i.get("connections", [])]
 
     def export_canvas(self) -> dict:
         """Return parts and connections for system.json serialisation."""
