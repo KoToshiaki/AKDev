@@ -115,6 +115,8 @@ def build_node_info(canvas, node_id: str) -> dict:
         "logical_ports": logical,
         "visual_ports":  visual,
         "connections":   connections,
+        # PATCH_PORT_DIRECTION_WIDTH_VALIDATION_V08: issues of all connections here.
+        "validation":    canvas.node_validation_issues(node_id),
     }
 
 
@@ -141,12 +143,28 @@ def build_wire_info(canvas, conn_id: str) -> dict:
         "from_vp":   frm.get("visual_port_id"),
         "to_vp":     to.get("visual_port_id"),
         "style":     c.get("style"),
+        # PATCH_PORT_DIRECTION_WIDTH_VALIDATION_V08: this connection's issues.
+        "validation": canvas.connection_validation(conn_id),
     }
 
 
 # ---------------------------------------------------------------------------
 # rendering
 # ---------------------------------------------------------------------------
+
+def _render_validation(issues: "list | None") -> list:
+    """Render a Validation section (PATCH_PORT_DIRECTION_WIDTH_VALIDATION_V08)."""
+    lines = ["Validation"]
+    issues = issues or []
+    if not issues:
+        lines.append("  OK")
+        return lines
+    for i in issues:
+        sev    = str(i.get("severity", "warning")).upper()
+        conn   = f" ({i['conn_id']})" if i.get("conn_id") else ""
+        lines.append(f"  {sev} {i.get('code')}: {i.get('message')}{conn}")
+    return lines
+
 
 def _render_node(info: dict) -> list[str]:
     lines = ["=== Port Detail ===", "Selection: node"]
@@ -202,6 +220,8 @@ def _render_node(info: dict) -> list[str]:
             )
     else:
         lines.append("  (none)")
+    lines.append("")
+    lines += _render_validation(info.get("validation"))
     return lines
 
 
@@ -222,6 +242,8 @@ def _render_wire(info: dict) -> list[str]:
         lines.append(f"Style: {style}")
     else:
         lines.append("Style: (default)")
+    lines.append("")
+    lines += _render_validation(info.get("validation"))
     return lines
 
 

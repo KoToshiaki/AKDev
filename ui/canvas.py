@@ -9,6 +9,8 @@ from PySide6.QtWidgets import (QGraphicsEllipseItem, QGraphicsItem,
                                 QGraphicsPathItem, QGraphicsRectItem,
                                 QGraphicsScene, QGraphicsView, QMenu)
 
+from core.port_validation import validate_connection
+
 
 _NODE_W = 140
 _NODE_H = 56
@@ -1575,12 +1577,53 @@ class Canvas(QGraphicsView):
             "route": route_data,
             "color": color,
         }
+        # PATCH_PORT_DIRECTION_WIDTH_VALIDATION_V08: diagnose (warning only) — the
+        # connection is ALWAYS created; issues are stored on the dict and logged.
+        conn["validation"] = self._validate_conn(conn)
         self._connections.append(conn)
         self._conn_items[conn["id"]] = self._make_conn_item(conn)
         self.update_connections()
         self._log(f"Connected: {from_node_id}:{from_port} → {to_node_id}:{to_port}")
+        for issue in conn["validation"]:
+            self._log(
+                f"Validation warning: {issue['code']} "
+                f"{issue.get('from_node')}:{issue.get('from_port')} -> "
+                f"{issue.get('to_node')}:{issue.get('to_port')}"
+            )
         self.connections_changed.emit()
         return conn
+
+    # ------------------------------------- port validation (PATCH_PORT_DIRECTION_WIDTH_VALIDATION_V08)
+
+    def _validate_conn(self, conn: dict) -> list:
+        """Run warning-only port validation for a connection dict (read-only)."""
+        frm = conn.get("from", {}) or {}
+        to  = conn.get("to", {}) or {}
+        fn, tn = frm.get("node_id"), to.get("node_id")
+        fp = frm.get("logical_port") or frm.get("port")
+        tp = to.get("logical_port") or to.get("port")
+        fnode = self.get_node(fn) if fn else None
+        tnode = self.get_node(tn) if tn else None
+        return validate_connection(
+            fnode.part() if fnode else None, fp,
+            tnode.part() if tnode else None, tp,
+            from_node_id=fn, to_node_id=tn, conn_id=conn.get("id"),
+        )
+
+    def connection_validation(self, conn_id: str) -> list:
+        """Return validation issues for a connection (stored, else recomputed)."""
+        conn = self.get_connection(conn_id)
+        if conn is None:
+            return []
+        issues = conn.get("validation")
+        return issues if issues is not None else self._validate_conn(conn)
+
+    def node_validation_issues(self, node_id: str) -> list:
+        """Aggregate validation issues for every connection touching *node_id*."""
+        out: list = []
+        for c in self.node_connections(node_id):
+            out.extend(self.connection_validation(c.get("id")))
+        return out
 
     def export_canvas(self) -> dict:
         """Return parts and connections for system.json serialisation."""
