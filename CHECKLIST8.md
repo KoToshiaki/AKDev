@@ -33,6 +33,8 @@
   - `core/bus_validation.py` 追加 / `ui/canvas.py` bus validation API+Log / `ui/port_detail.py` bus issue 表示
   - `python -m pytest tests/` → **937 passed**（913 + 新規 24）
   - 次候補: `PATCH_DEVICE_REGISTRY_REFACTOR_V08` または `PATCH_MULTI_RAM_UART_ADDRESS_MAP_V08`
+* [x] 次候補 `PATCH_DEVICE_REGISTRY_REFACTOR_V08` の設計資料を作成した（2026-06-17）
+  - `PATCH_DEVICE_REGISTRY_REFACTOR_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・挙動不変の device list driven 化 + VRAM≠RAM 土台**
 * [ ] v0.8 テーマを確定する（候補: Device Expansion & Connection Validation）
   - 完了条件: ユーザーがテーマと最初のパッチを決定する
 * [ ] 最初のパッチ（`PATCH_PORT_SCHEMA_V08` 想定）の実装範囲をユーザーが承認する
