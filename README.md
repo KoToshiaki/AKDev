@@ -53,12 +53,17 @@ python main.py
 
 ## Status
 
-**v0.6 PHASE COMPLETE (2026-06-16)** — UI Polish & Usability plus the Virtual Circuit
-Runtime foundation (Program/Sources assignment, Write Program, Virtual CPU Step & Trace,
-Canvas-derived CircuitPlan, connectivity-gated Write/Build/Run/Step). `pytest tests/`
-= 779 passed.
+**v0.7 PHASE COMPLETE (2026-06-17)** — Plan-driven Virtual Devices & Address Map.
+The CPU+RAM+UART circuit drawn on the Canvas is now turned into real execution devices
+(circuit mode 64 KB RAM with the UART as an MMIO window at `0x0100–0x0107`), with an
+Address Map (base/size/overlap detection), CPU↔RAM ST/LD validation (`ram_selftest.asm`
+→ UART `PASS`, plus Fibonacci), target-CPU selection for multi-CPU canvases, a Run Status
+Panel (execution summary) and a Port Detail Panel (logical/visual ports, direction/width,
+connections). Legacy mode (no CPU on canvas) is unchanged. `pytest tests/` = 860 passed.
 
-Current phase: **v0.7 — Plan-driven Virtual Devices & Address Map**. See
-[ROADMAP7.md](ROADMAP7.md) / [CHECKLIST7.md](CHECKLIST7.md). The completed v0.6 phase
-plan is in [ROADMAP6.md](ROADMAP6.md) / [CHECKLIST6.md](CHECKLIST6.md) (kept for history;
-completed patch docs archived under `old/`).
+Current phase: **v0.8 (candidates only)** — the live planning files are
+[ROADMAP8.md](ROADMAP8.md) / [CHECKLIST8.md](CHECKLIST8.md). Completed phase plans are
+archived under `old/` (kept for history, not deleted): the v0.7 plan in
+[old/ROADMAP7.md](old/ROADMAP7.md) / [old/CHECKLIST7.md](old/CHECKLIST7.md), the v0.6 plan
+in [old/ROADMAP6.md](old/ROADMAP6.md) / [old/CHECKLIST6.md](old/CHECKLIST6.md), along with
+all completed patch docs.

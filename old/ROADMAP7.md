@@ -12,6 +12,68 @@
 
 ---
 
+# ✅ v0.7 PHASE COMPLETE — 2026-06-17
+
+- **完了日**: 2026-06-17
+- **最終テスト結果**: `python -m pytest tests/` → **860 passed**, 21 warnings
+  （PySide6 Deprecation のみ・失敗なし）
+- **v0.7 テーマ**: Plan-driven Virtual Devices & Address Map
+  （Canvas に描いた回路を「実行時仮想デバイス」として動かす実行基盤の確立）
+
+## 達成した主要機能
+
+| 領域 | 内容 |
+|---|---|
+| Plan-driven Devices | CircuitPlan から実 RAM/UART/CPU を生成。circuit mode RAM 64KB / UART MMIO 窓 0x0100–0x0107 / legacy mode（256B）維持 |
+| Address Map | デバイス単位の base/size/end・attach ranges 管理、unintended overlap 検出（MMIO 窓は除外）、summary 表示、`runtime.address_map` 保持 |
+| CPU/RAM Validation | `ram_selftest.asm` で ST/LD/BEQ 検証 → UART `PASS`、Fibonacci を Canvas 由来 runtime で検証 |
+| Target CPU Selection | 複数 CPU 時に選択中 CPU を target 化、target の `sources.asm` のみ使用、未選択は ambiguous ブロック、非選択 CPU 未接続は target 実行を妨げない |
+| Run Status Panel | target CPU / RAM / UART / Address Map / loaded program / PC / cycle / halted / trace / UART 出力を集約表示 |
+| Port Detail Panel | logical ports / visual ports / direction / width / connection / wire detail 表示、Canvas read-only API + 接続変更時更新 |
+
+## 完了した PATCH 一覧（資料は `old/` へ収納）
+
+1. `PATCH_PLAN_DRIVEN_DEVICES_V07`
+2. `PATCH_ADDRESS_MAP_V07`
+3. `PATCH_CPU_RAM_VALIDATION_V07`
+4. `PATCH_TARGET_CPU_SELECTION_V07`
+5. `PATCH_RUN_STATUS_PANEL_V07`
+6. `PATCH_PORT_DETAIL_V07`
+
+各 `PATCH_*_V07_ROADMAP.md` / `..._CHECKLIST.md`（計 12 ファイル）は `old/` へ収納（削除せず保管）。
+`ROADMAP7.md` / `CHECKLIST7.md` は root に残す。
+
+## v0.8 以降へ送る課題
+
+詳細・候補整理は `ROADMAP8.md` / `CHECKLIST8.md` を参照。
+
+- Port direction / width validation（接続可否チェックの土台は Port Detail で確認可能になった）
+- Bus protocol validation
+- 複数 RAM / UART の本格対応（現状は単一前提）
+- ROM / VRAM / Storage / Input デバイス拡張
+- Address Map Editor（任意アドレス編集 UI）
+- コード領域の拡張設計 / UART MMIO 窓の再配置・可変化
+- CPU 命令拡張（CALL / RET / IN 等。スタック設計が必要）
+- ゲーム runtime 準備
+- HDL / FPGA export 準備
+- `tests/test/system.json` テスト差分の扱い（ユーザー判断保留・v0.6 繰越）
+
+## GUI 目視確認が必要な項目（ヘッドレス環境のため自動テスト外）
+
+- CPU+RAM+UART 配線 → Write → Run で UART Console に Hello World、Run Status に集約表示。
+- Debug リボンの「Run Status」「Port Detail」トグルでパネル表示/非表示。
+- 複数 CPU で選択を切り替えると target CPU 表示が追従、未選択でブロック表示。
+- ノード/wire 選択で Port Detail が追従、接続作成/削除/visual port 移動で崩れない。
+- legacy（CPU 未配置）エディタタブ Build→Run が従来どおり "Hi"。
+
+## 注意事項
+
+- commit / push はユーザー操作（本整理では未実施）。
+- `tests/test/system.json` の差分は勝手に破棄/コミット対象化しない。
+- v0.8 は本ファイル下部および `ROADMAP8.md` の候補整理のみ。実装はユーザー指示後。
+
+---
+
 ## v0.6 到達点（終了扱い・2026-06-16 整理）
 
 v0.6 は「UI Polish & Usability」として始まり、後半で **Virtual Circuit Runtime の基盤**まで到達した。

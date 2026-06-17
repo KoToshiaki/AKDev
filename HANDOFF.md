@@ -1,10 +1,94 @@
 # AKDev 引き継ぎメモ
 
-更新日: 2026-06-16（✅ v0.6 PHASE COMPLETE / v0.7 開始準備）
+更新日: 2026-06-17（✅ v0.7 PHASE COMPLETE / v0.8 開始準備 / 現行ドキュメントを v0.8 に一本化）
 
 ---
 
-## ✅ v0.6 PHASE COMPLETE（2026-06-16）— 現在フェーズは v0.7
+## 📂 現行ドキュメント（2026-06-17 整理）
+
+- **現行の管理ファイル = `ROADMAP8.md` / `CHECKLIST8.md`**（root に残すフェーズ計画はこの 2 つのみ）。
+- **v0.6 / v0.7 は完了済み履歴**として `old/` に収納（削除せず保管）。
+- 今回 `git mv` で `old/` へ移したファイル:
+  - `ROADMAP6.md` → `old/ROADMAP6.md`
+  - `CHECKLIST6.md` → `old/CHECKLIST6.md`
+  - `ROADMAP7.md` → `old/ROADMAP7.md`
+  - `CHECKLIST7.md` → `old/CHECKLIST7.md`
+- 各フェーズの完了済みパッチ資料（`PATCH_*_V05_*` / `PATCH_*_V07_*`）も既に `old/` に収納済み。
+- root に進行中と誤解されるフェーズ計画 / PATCH 資料は残っていない。
+
+### 次の git 操作（ユーザー実施）
+
+```bash
+git add -A
+git status   # v0.7 PHASE COMPLETE 整理 + 今回のフェーズ資料 old/ 収納（rename）+ ドキュメント更新を確認
+git commit -m "docs: archive v0.6/v0.7 plans to old and consolidate on v0.8"
+# 必要なら git push
+```
+
+> `tests/test/system.json` に差分が出ている場合は、コミット前に破棄/含める/.gitignore 化を判断すること（勝手に破棄しない）。
+
+---
+
+## ✅ v0.7 PHASE COMPLETE（2026-06-17）— 次フェーズは v0.8
+
+### 現在状態
+
+- **現在状態 = v0.7 PHASE COMPLETE**（Plan-driven Virtual Devices & Address Map）。
+- **最終テスト**: `python -m pytest tests/` → **860 passed**, 21 warnings（PySide6 Deprecation のみ）。
+- `git branch` = `dev` / 最新コミット `cdfcf82 feat: add port detail panel`。
+- 後続計画は **`ROADMAP8.md` / `CHECKLIST8.md`**（現行）。v0.7 の計画書は `old/ROADMAP7.md`（PHASE COMPLETE セクション）/ `old/CHECKLIST7.md`（2026-06-17 に `old/` へ収納）。
+
+### 現在の最新到達点
+
+Canvas に描いた CPU+RAM+UART 回路を CircuitPlan から実デバイス化して実行し、その実行状態・
+アドレス配置・ポート/接続を専用パネルで確認できる。複数 CPU では選択 CPU を実行対象にできる。
+
+### v0.7 で完了した機能
+
+| 機能 | 概要 |
+|---|---|
+| Plan-driven Devices | CircuitPlan から実 RAM/UART/CPU 生成。circuit mode RAM 64KB / legacy 256B 維持 |
+| Address Map | base/size/end・attach ranges・overlap 検出・summary 表示・`runtime.address_map` |
+| CPU/RAM Validation | `ram_selftest.asm`（ST/LD/BEQ → UART `PASS`）/ Fibonacci を Canvas 由来 runtime で検証 |
+| Target CPU Selection | 複数 CPU 時に選択 CPU を target 化・target の asm のみ使用・未選択 ambiguous ブロック |
+| Run Status Panel | target CPU / RAM / UART / Address Map / loaded program / PC / trace / UART を集約表示 |
+| Port Detail Panel | logical/visual ポート・direction/width・connection・wire detail 表示（read-only） |
+
+### 重要な仕様
+
+- **circuit mode の RAM は 64KB**（`_CIRCUIT_RAM_SIZE = 0x10000`）。legacy mode は 256B（`_SIM_RAM_SIZE = 0x0100`）。
+- **UART は MMIO window `0x0100–0x0107`**（RAM の中に窓として配置。RAM は窓を避けて attach）。
+- **Address Map**: `core/circuit.py` の `build_address_map` / `validate_address_map` / `format_address_map_summary`。`runtime.address_map` に保持。
+- **Target CPU Selection**: `resolve_circuit(nodes, conns, target_cpu_id=)` が `target_cpu` を返す。単一 CPU は選択非依存、複数 CPU は選択必須（未選択は ambiguous）。
+- **Run Status Panel**: `ui/run_status.py`。read-only、選択・Write/Build/Run/Step/Reset で更新。
+- **Port Detail Panel**: `ui/port_detail.py`。read-only、選択変更・wire 選択・接続変更で更新。Canvas read-only API `node_connections` / `part_logical_ports` / `connections_changed` シグナルを使用。
+
+### GUI 目視確認が必要な項目（ヘッドレス環境のため自動テスト外）
+
+1. CPU+RAM+UART 配線 → Write → Run で UART Console に Hello World、Run Status に集約表示。
+2. Debug リボンの「Run Status」「Port Detail」トグルでパネル表示/非表示。
+3. 複数 CPU で選択を切り替えると target CPU 表示が追従、未選択でブロック表示。
+4. ノード/wire 選択で Port Detail が追従、接続作成/削除/visual port 移動で崩れない。
+5. legacy（CPU 未配置）エディタタブ Build→Run が従来どおり "Hi"。
+
+### 次フェーズ候補（v0.8）
+
+`ROADMAP8.md` / `CHECKLIST8.md` に候補整理済み（実装は未着手）。
+Port direction/width validation / Bus protocol validation / 複数 RAM・UART / ROM・VRAM・
+Storage・Input / Address Map Editor / コード領域拡張 / MMIO 再配置 / 命令拡張 /
+ゲーム runtime 準備 / HDL・FPGA export 準備。
+
+### 注意事項
+
+- **commit / push はユーザー操作**（本整理では未実施）。次にユーザーが行う git 操作は下記「次の git 操作」を参照。
+- `tests/test/system.json` のテスト実行差分は**勝手に破棄・コミット対象化しない**（破棄 / コミット / .gitignore 化はユーザー判断・v0.6 からの繰越課題）。
+- **`old/` への収納**: v0.7 完了パッチ資料 `PATCH_*_V07_ROADMAP.md` / `..._CHECKLIST.md`（12 ファイル）を `git mv` で `old/` へ収納済み（削除せず保管）。さらに 2026-06-17 のドキュメント整理で `ROADMAP6.md` / `CHECKLIST6.md` / `ROADMAP7.md` / `CHECKLIST7.md` も `old/` へ収納（現行は `ROADMAP8.md` / `CHECKLIST8.md` のみ）。root に進行中と誤解されるフェーズ計画 / PATCH 資料は残っていない。
+
+> 次の git 操作はこのファイル冒頭「📂 現行ドキュメント」セクションの手順を参照（v0.7 完了整理と本整理をまとめてコミットする）。
+
+---
+
+## ✅ v0.6 PHASE COMPLETE（2026-06-16）— v0.7 で完了済み
 
 ### 次に作業する人へ（要点）
 
