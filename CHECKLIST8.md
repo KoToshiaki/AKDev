@@ -75,6 +75,8 @@
   - read-only（CPU/bus write は no-op）。circuit_compat は base 無し→未配置（Editor override で配置・RAM 縮小要）。game16 は ROM 0x0000 / RAM 0x8000 非重複。**Program loader は RAM ロードのまま**（ROM target 化は後続）
   - `python -m pytest tests/` → **1059 passed**（1034 + 新規 25）
   - 次候補: `PATCH_PROGRAM_TARGET_ROM_V08` または `PATCH_AK32_INSTRUCTION_EXPANSION_V08`
+* [x] 次候補 `PATCH_PROGRAM_TARGET_ROM_V08` の設計資料を作成した（2026-06-19）
+  - `PATCH_PROGRAM_TARGET_ROM_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・program target: RAM / ROM 選択・既定 RAM 互換・ROM target は `RomPart.load_bytes()` でロード・CPU/bus write は no-op のまま・ROM target 時 `reset_pc=rom.base`・ROM runtime（base 確定）がある時のみ ROM 有効・既存 project に `program_target` 無しは RAM 扱い**
 * [x] 次候補 `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08` の設計資料を作成した（2026-06-18）
   - `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・ROM/Input 優先（Input は LD で読め IN 命令不要）・VRAM/Storage は後続・新 device 無しは現行互換・分割案（INPUT 先行 → ROM）あり**
 * [ ] v0.8 テーマを確定する（候補: Device Expansion & Connection Validation）
