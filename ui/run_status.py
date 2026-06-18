@@ -72,6 +72,8 @@ def render_status(status: dict) -> str:
     status = status or {}
     mode = status.get("mode", "legacy")
     lines: list[str] = ["=== Run Status ===", f"Mode: {mode}"]
+    # PATCH_PROGRAM_TARGET_ROM_V08: show the current Write Program load target.
+    lines.append(f"Program Target: {status.get('program_target', 'RAM')}")
 
     # ---- Target / Circuit ----
     lines.append(f"Target CPU: {status.get('target_cpu') or 'None'}")

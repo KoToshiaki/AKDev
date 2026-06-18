@@ -77,6 +77,11 @@
   - 次候補: `PATCH_PROGRAM_TARGET_ROM_V08` または `PATCH_AK32_INSTRUCTION_EXPANSION_V08`
 * [x] 次候補 `PATCH_PROGRAM_TARGET_ROM_V08` の設計資料を作成した（2026-06-19）
   - `PATCH_PROGRAM_TARGET_ROM_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・program target: RAM / ROM 選択・既定 RAM 互換・ROM target は `RomPart.load_bytes()` でロード・CPU/bus write は no-op のまま・ROM target 時 `reset_pc=rom.base`・ROM runtime（base 確定）がある時のみ ROM 有効・既存 project に `program_target` 無しは RAM 扱い**
+* [x] `PATCH_PROGRAM_TARGET_ROM_V08` 実装完了（2026-06-19・**既定 RAM・既存 project は RAM 互換**）
+  - `ui/win.py`（`_program_target` / `_normalize_program_target` / `set_program_target` / `program_target` / `_program_target_status` / `_rom_runtime_ready` / `_load_program_to_ram` / `_load_program_to_rom`・`_assemble_and_load` で RAM/ROM 分岐・`_build_runtime_devices` で ROM target 時 `reset_pc=rom.base`・project new/open/persist で `program_target`）/ `ui/run_status.py`（`Program Target` 行）
+  - ROM target は `RomPart.load_bytes()` でロード（bus write ではない）。ROM 不成立（無し/未配置/overlap/size 超過）は error・RAM へ fallback しない。`VirtualCircuitRuntime.load_program` は不変。`tests/test/system.json` 差分なし
+  - `python -m pytest tests/` → **1080 passed**（1059 + 新規 21）
+  - 次候補: `PATCH_AK32_INSTRUCTION_EXPANSION_V08` または `PATCH_TIMER_DEVICE_V08`
 * [x] 次候補 `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08` の設計資料を作成した（2026-06-18）
   - `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・ROM/Input 優先（Input は LD で読め IN 命令不要）・VRAM/Storage は後続・新 device 無しは現行互換・分割案（INPUT 先行 → ROM）あり**
 * [ ] v0.8 テーマを確定する（候補: Device Expansion & Connection Validation）

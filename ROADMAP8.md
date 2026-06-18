@@ -69,9 +69,11 @@ v0.8 は、この実行基盤の上で **接続の妥当性検証** と **デバ
   （既定 None・GAME16 0x0000/0x8000）。既定 `circuit_compat` は **RAM ロード維持**（ROM 非配置は現行互換・
   ROM 配置は Editor override で base 付与+RAM 縮小）、`game16` は ROM 0x0000 / RAM 0x8000 非重複。
   **Program loader は RAM のまま**（ROM target 化は後続 `PATCH_PROGRAM_TARGET_ROM_V08`）。
-- **`PATCH_ROM_DEVICE_V08` の次候補として `PATCH_PROGRAM_TARGET_ROM_V08` を検討中**（program target: RAM / ROM
-  選択・ROM へは `RomPart.load_bytes()` でロード・ROM target 時 `reset_pc=rom.base`・**既定は RAM 互換**）。
-  設計資料: `PATCH_PROGRAM_TARGET_ROM_V08_ROADMAP.md` / `..._CHECKLIST.md`（実装は未着手）。
+- **`PATCH_PROGRAM_TARGET_ROM_V08` 実装完了**（program target: RAM / ROM 選択）。Write Program のロード先を
+  RAM/ROM で切替（`self._program_target`・`system.json` に `program_target` 永続化・無/不正は RAM）。ROM target は
+  `RomPart.load_bytes()` でロードし CPU `reset_pc=rom.base`（CPU/bus write は no-op のまま）。ROM 不成立（無し/未配置/
+  overlap/size 超過）は error で RAM へ fallback しない。**既定は RAM・既存 project は RAM 互換**。
+  `python -m pytest tests/` → 1080 passed（+21）。次候補 `PATCH_AK32_INSTRUCTION_EXPANSION_V08` / `PATCH_TIMER_DEVICE_V08`。
 
 ### E. Address Map Editor
 - ユーザーによる base/size の任意編集 UI（v0.7 は固定既定）。

@@ -80,6 +80,10 @@ class MainWin(QMainWindow):
         self._loaded_program: "dict | None" = None
         # Per-device Address Map overrides (PATCH_ADDRESS_MAP_EDITOR_V08); empty = auto.
         self._address_overrides: dict = {}
+        # Program load target (PATCH_PROGRAM_TARGET_ROM_V08): "ram" (default, fully
+        # compatible) or "rom". ROM target only takes effect when a ROM runtime with a
+        # resolved base exists; otherwise Write Program errors (no silent RAM fallback).
+        self._program_target: str = "ram"
         self._setup_log()            # must be first — others write to self._log
         self._setup_console()        # Console: program/run output (tabified with Log)
         self._setup_uart_console()   # UART Console panel (tabified with Log)
@@ -251,6 +255,21 @@ class MainWin(QMainWindow):
         self._sim_input = self._sim_rom = None
         self._sim_ram_node = self._sim_uart_node = self._sim_cpu_node = None
         self._sim_input_node = self._sim_rom_node = None
+        # PATCH_PROGRAM_TARGET_ROM_V08: when the program target is ROM and a ROM
+        # runtime base is resolved, the CPU resets to the ROM base so it fetches the
+        # program from ROM. The ROM spec can appear after the CPU spec, so resolve the
+        # base in a pre-pass. Otherwise the layout reset PC (default 0x0000) is kept,
+        # which preserves the existing RAM-target behaviour exactly.
+        cpu_reset_pc = layout.reset_pc
+        if self._program_target == "rom":
+            rom_base = next(
+                (s["base"] for s in specs
+                 if s.get("kind") == "rom" and s.get("runtime_backed")
+                 and s.get("base") is not None),
+                None,
+            )
+            if rom_base is not None:
+                cpu_reset_pc = rom_base
         for spec in specs:
             if not spec.get("runtime_backed"):
                 continue
@@ -274,7 +293,7 @@ class MainWin(QMainWindow):
                 self._sim_input_node = spec["node_id"]
             elif kind == "cpu" and self._sim_cpu is None:
                 self._sim_cpu = AK32Part("sim_cpu", "AK32", self._sim_bus,
-                                         reset_pc=layout.reset_pc)
+                                         reset_pc=cpu_reset_pc)
                 self._sim_cpu_node = spec["node_id"]
 
         # Address Map from the addressable specs: the first RAM (memory container) +
@@ -746,6 +765,105 @@ class MainWin(QMainWindow):
         self._refresh_run_panels()
         self._update_port_detail()
 
+    # ----------------------------------------- program target (PATCH_PROGRAM_TARGET_ROM_V08)
+
+    @staticmethod
+    def _normalize_program_target(value) -> str:
+        """Coerce *value* to a valid target. Unknown / missing -> ``"ram"`` (default)."""
+        return value if value in ("ram", "rom") else "ram"
+
+    def program_target(self) -> str:
+        """Return the current program load target (``"ram"`` or ``"rom"``)."""
+        return self._program_target
+
+    def set_program_target(self, target: str) -> None:
+        """Set the program load target and persist it (ROM/RAM Write Program switch).
+
+        Invalid values fall back to ``"ram"`` (logged). The new target affects the
+        CPU reset PC and the load destination on the next Write Program, which
+        rebuilds the runtime; the status panel is refreshed immediately.
+        """
+        norm = self._normalize_program_target(target)
+        if norm != target:
+            self._log.append(
+                f"Program Target: 不正値 '{target}' -> RAM にフォールバックしました"
+            )
+        self._program_target = norm
+        self._log.append(f"Program Target: {self._program_target_status()}")
+        self._update_run_status()
+        if self._project_root is not None:
+            self._persist_system()
+
+    def _rom_runtime_ready(self) -> bool:
+        """True if a ROM runtime with a resolved base exists (ROM target viable)."""
+        return self._sim_rom is not None and self._sim_rom.base is not None
+
+    def _program_target_status(self) -> str:
+        """Human-readable current target (e.g. ``"RAM"`` / ``"ROM @0x0000"``)."""
+        if self._program_target != "rom":
+            return "RAM"
+        if self._rom_runtime_ready():
+            return f"ROM @0x{self._sim_rom.base:04x}"
+        return "ROM (unplaced)"
+
+    def _load_program_to_ram(self, binary: bytes, source_name: str = "") -> None:
+        """Load *binary* into RAM via the runtime (existing default behaviour)."""
+        self._runtime.load_program(binary, source_name=source_name)
+
+    def _load_program_to_rom(self, binary: bytes, source_name: str = "") -> bool:
+        """Load *binary* into ROM via ``RomPart.load_bytes`` (IDE loader, not the bus).
+
+        Validates that a ROM runtime exists, is placed, the Address Map has no overlap
+        errors, and the program fits. On any failure the program is NOT loaded and
+        NOT written to RAM (no silent fallback); the error is logged and False is
+        returned. On success the working RAM is cleared and the CPU/UART/trace are
+        reset (the CPU's reset PC is already the ROM base from the runtime rebuild).
+        """
+        rom = self._sim_rom
+        if rom is None:
+            self._log.append(
+                "Write Program: ROM target ですが ROM runtime がありません"
+                "（ROM を配置するか RAM target にしてください）"
+            )
+            return False
+        if rom.base is None or rom.size is None:
+            self._log.append(
+                "Write Program: ROM target ですが ROM の base/size が未確定です"
+                "（Address Map Editor で配置してください）"
+            )
+            return False
+        amap = self._runtime.address_map
+        issues = validate_address_map(amap) if amap else []
+        if issues:
+            self._log.append(
+                "Write Program: ROM target ですが Address Map に問題があります: "
+                + "; ".join(str(i) for i in issues)
+            )
+            return False
+        if len(binary) > rom.size:
+            self._log.append(
+                f"Write Program: ROM target ですが program ({len(binary)} B) が "
+                f"ROM size (0x{rom.size:x} B) を超えています"
+            )
+            return False
+        try:
+            rom.load_bytes(binary)
+        except ValueError as exc:
+            self._log.append(f"Write Program: ROM load failed: {exc}")
+            return False
+        # ROM holds the program; clear the working RAM and reset CPU/UART/trace. The
+        # runtime stays valid and is marked loaded so Step/Run can proceed.
+        if self._runtime.ram is not None:
+            self._runtime.ram.reset()
+        self._runtime.reset()
+        self._runtime.loaded = True
+        self._runtime.loaded_program = {
+            "source_name":    source_name,
+            "target_node_id": None,
+            "size":           len(binary),
+        }
+        return True
+
     # ----------------------------------------- port detail (PATCH_PORT_DETAIL_V07)
 
     def _collect_port_detail(self) -> dict:
@@ -810,6 +928,7 @@ class MainWin(QMainWindow):
 
         return {
             "mode":        mode,
+            "program_target": self._program_target_status(),
             "target_cpu":  plan.get("target_cpu"),
             "ram_desc":    ram_desc,
             "uart_desc":   uart_desc,
@@ -927,6 +1046,7 @@ class MainWin(QMainWindow):
         self._editor_tabs.set_project_root(root)
         self._canvas.import_parts([], {})
         self._address_overrides = {}        # PATCH_ADDRESS_MAP_EDITOR_V08
+        self._program_target = "ram"        # PATCH_PROGRAM_TARGET_ROM_V08 (new = RAM)
         self._address_map_editor.refresh()
         self._uart_console.clear()
         self._bus_trace.clear()
@@ -949,6 +1069,10 @@ class MainWin(QMainWindow):
         # PATCH_ADDRESS_MAP_EDITOR_V08: restore overrides (absent in old projects = {}).
         ov = system.get("address_map_overrides")
         self._address_overrides = dict(ov) if isinstance(ov, dict) else {}
+        # PATCH_PROGRAM_TARGET_ROM_V08: restore program target (absent/invalid = RAM).
+        self._program_target = self._normalize_program_target(
+            system.get("program_target")
+        )
         self._project_root = root
         self._editor_tabs.set_project_root(root)
         self._address_map_editor.refresh()
@@ -968,6 +1092,8 @@ class MainWin(QMainWindow):
         system["parts"] = self._canvas.export_parts()
         # PATCH_ADDRESS_MAP_EDITOR_V08: persist per-device Address Map overrides.
         system["address_map_overrides"] = dict(self._address_overrides)
+        # PATCH_PROGRAM_TARGET_ROM_V08: persist program load target (default "ram").
+        system["program_target"] = self._program_target
         save_system(root, system)
 
     def _save_project(self):
@@ -1095,13 +1221,23 @@ class MainWin(QMainWindow):
         self._log.append(
             f"Build succeeded: {out_path.as_posix()}  ({len(binary)} bytes)"
         )
-        # Load binary into the virtual circuit (RAM/CPU/UART) via the runtime.
-        # This also marks the runtime as loaded so Step/Run can gate on it
-        # (PATCH_VIRTUAL_CPU_STEP_TRACE_V05).
-        self._runtime.load_program(binary, source_name=source_name)
+        # Load binary into the virtual circuit via the selected program target. This
+        # also marks the runtime as loaded so Step/Run can gate on it
+        # (PATCH_VIRTUAL_CPU_STEP_TRACE_V05). RAM target is the default and unchanged;
+        # ROM target loads via RomPart.load_bytes and errors instead of falling back to
+        # RAM on failure (PATCH_PROGRAM_TARGET_ROM_V08).
+        if self._program_target == "rom":
+            if not self._load_program_to_rom(binary, source_name=source_name):
+                self._address_map = {}
+                self._editor_tabs.clear_highlight()
+                return False
+            dest = f"ROM @0x{self._sim_rom.base:04x}"
+        else:
+            self._load_program_to_ram(binary, source_name=source_name)
+            dest = "RAM"
         self._sim_cycle = 0
         self._pause_requested = False
-        self._log.append(f"Loaded binary to RAM: {len(binary)} bytes")
+        self._log.append(f"Loaded binary to {dest}: {len(binary)} bytes")
         self._console.clear()
         self._console.appendPlainText(f"[build] loaded {len(binary)} bytes — ready")
         self._address_map = address_map
