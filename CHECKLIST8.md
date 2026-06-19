@@ -98,6 +98,8 @@
   - deterministic tick（CPU step 数・wall-clock 不使用・割り込みなし）。UART+Input+Timer で 0x0100/0x0110/0x0120。CPU は既存 `LD` で read・`ST` で clear。`tests/test_timer_device_v08.py`（25 件）・`tests/test/system.json` 差分なし
   - `python -m pytest tests/` → **1136 passed**（1111 + 新規 25）
   - 次候補: `PATCH_VRAM_DEVICE_V08` / `PATCH_GAME_RUNTIME_MINIMAL_V08` / `PATCH_V08_STABILIZE_AND_DOCS`
+* [x] 次候補 `PATCH_VRAM_DEVICE_V08` の設計資料を作成した（2026-06-20）
+  - `PATCH_VRAM_DEVICE_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・VRAM は CPU から `LD`/`ST` 可能な memory device（kind=vram・role=memory・writable・reset 0 クリア・CPU 命令追加なし）・初期は indexed color 32×32 / 1 byte/pixel / 1024 B・ROM と同型で circuit_compat は Editor override 配置（game16 は 0xC000 案）・registry は `_RUNTIME_BACKED`/`_RUNTIME_ID`/`_base_size` のみ追加（kind/role/label は既存）・表示 UI は後続（`PATCH_GAME_RUNTIME_MINIMAL_V08` / `PATCH_VRAM_VIEWER_V08`）・VRAM 非配置は現行互換・Game Runtime Minimal の前段**
 * [x] 次候補 `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08` の設計資料を作成した（2026-06-18）
   - `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・ROM/Input 優先（Input は LD で読め IN 命令不要）・VRAM/Storage は後続・新 device 無しは現行互換・分割案（INPUT 先行 → ROM）あり**
 * [ ] v0.8 テーマを確定する（候補: Device Expansion & Connection Validation）
