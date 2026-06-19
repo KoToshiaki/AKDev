@@ -79,6 +79,10 @@ v0.8 は、この実行基盤の上で **接続の妥当性検証** と **デバ
   後続 `PATCH_AK32_STACK_CALL_RET_V08` へ。opcode は既存 0x00–0x0A 不変・末尾追記（0xFF 予約）。opcode 三重管理
   （cpu/asm/disasm）の単一化は任意先行 `PATCH_AK32_OPCODE_TABLE_V08`。設計資料:
   `PATCH_AK32_INSTRUCTION_EXPANSION_V08_ROADMAP.md` / `..._CHECKLIST.md`（実装は未着手）。
+- **最初の子パッチとして `PATCH_AK32_BITWISE_INSTRUCTIONS_V08` を検討中**（`AND`/`OR`/`XOR`/`NOT`・opcode 0x0B–0x0E）。
+  **Input bit 判定に直結**（`LD`+`AND`+`BEQ`）。`AND`/`OR`/`XOR` は 3 オペランド・`NOT` は 2 オペランド。CPU/ASM/disasm の
+  3 か所追記・既存 opcode 不変・`CALL`/`RET`/stack は後続。設計資料: `PATCH_AK32_BITWISE_INSTRUCTIONS_V08_ROADMAP.md` /
+  `..._CHECKLIST.md`（実装は未着手）。
 
 ### E. Address Map Editor
 - ユーザーによる base/size の任意編集 UI（v0.7 は固定既定）。

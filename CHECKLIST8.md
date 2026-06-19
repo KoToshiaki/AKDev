@@ -84,6 +84,8 @@
   - 次候補: `PATCH_AK32_INSTRUCTION_EXPANSION_V08` または `PATCH_TIMER_DEVICE_V08`
 * [x] 次候補 `PATCH_AK32_INSTRUCTION_EXPANSION_V08` の設計資料を作成した（2026-06-19・親設計）
   - `PATCH_AK32_INSTRUCTION_EXPANSION_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・ISA 拡張は段階分割・最初の実装候補は Bitwise（`AND`/`OR`/`XOR`/`NOT`＝`PATCH_AK32_BITWISE_INSTRUCTIONS_V08`）・CALL/RET/stack は後続 `PATCH_AK32_STACK_CALL_RET_V08`・既存 opcode 0x00–0x0A 不変で末尾追記（0xFF 予約）・opcode 三重管理の単一化は任意先行 `PATCH_AK32_OPCODE_TABLE_V08`・既存互換維持**
+* [x] 最初の子パッチ `PATCH_AK32_BITWISE_INSTRUCTIONS_V08` の設計資料を作成した（2026-06-19）
+  - `PATCH_AK32_BITWISE_INSTRUCTIONS_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・対象命令は `AND`/`OR`/`XOR`/`NOT` の 4 命令のみ・opcode `AND=0x0B`/`OR=0x0C`/`XOR=0x0D`/`NOT=0x0E`・`AND`/`OR`/`XOR` は 3 オペランド R-type・`NOT` は 2 オペランド・既存 opcode 0x00–0x0A 不変・0xFF 予約・CPU/ASM/disasm の 3 か所追記・Input bit 判定（`LD`+`AND`+`BEQ`）に直結・opcode 単一化/shift/imm bitwise/branch/CALL/RET/IN は対象外・既存互換維持**
 * [x] 次候補 `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08` の設計資料を作成した（2026-06-18）
   - `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・ROM/Input 優先（Input は LD で読め IN 命令不要）・VRAM/Storage は後続・新 device 無しは現行互換・分割案（INPUT 先行 → ROM）あり**
 * [ ] v0.8 テーマを確定する（候補: Device Expansion & Connection Validation）
