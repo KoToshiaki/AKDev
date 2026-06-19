@@ -74,6 +74,11 @@ v0.8 は、この実行基盤の上で **接続の妥当性検証** と **デバ
   `RomPart.load_bytes()` でロードし CPU `reset_pc=rom.base`（CPU/bus write は no-op のまま）。ROM 不成立（無し/未配置/
   overlap/size 超過）は error で RAM へ fallback しない。**既定は RAM・既存 project は RAM 互換**。
   `python -m pytest tests/` → 1080 passed（+21）。次候補 `PATCH_AK32_INSTRUCTION_EXPANSION_V08` / `PATCH_TIMER_DEVICE_V08`。
+- **次候補として `PATCH_AK32_INSTRUCTION_EXPANSION_V08`（AK32 ISA 拡張）を検討中**（親設計）。一気に足さず段階分割し、
+  **最初は Bitwise（`AND`/`OR`/`XOR`/`NOT`）を優先**（Input bit 判定直結・stack 不要）。`CALL`/`RET` は stack 設計が要るため
+  後続 `PATCH_AK32_STACK_CALL_RET_V08` へ。opcode は既存 0x00–0x0A 不変・末尾追記（0xFF 予約）。opcode 三重管理
+  （cpu/asm/disasm）の単一化は任意先行 `PATCH_AK32_OPCODE_TABLE_V08`。設計資料:
+  `PATCH_AK32_INSTRUCTION_EXPANSION_V08_ROADMAP.md` / `..._CHECKLIST.md`（実装は未着手）。
 
 ### E. Address Map Editor
 - ユーザーによる base/size の任意編集 UI（v0.7 は固定既定）。

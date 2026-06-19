@@ -82,6 +82,8 @@
   - ROM target は `RomPart.load_bytes()` でロード（bus write ではない）。ROM 不成立（無し/未配置/overlap/size 超過）は error・RAM へ fallback しない。`VirtualCircuitRuntime.load_program` は不変。`tests/test/system.json` 差分なし
   - `python -m pytest tests/` → **1080 passed**（1059 + 新規 21）
   - 次候補: `PATCH_AK32_INSTRUCTION_EXPANSION_V08` または `PATCH_TIMER_DEVICE_V08`
+* [x] 次候補 `PATCH_AK32_INSTRUCTION_EXPANSION_V08` の設計資料を作成した（2026-06-19・親設計）
+  - `PATCH_AK32_INSTRUCTION_EXPANSION_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・ISA 拡張は段階分割・最初の実装候補は Bitwise（`AND`/`OR`/`XOR`/`NOT`＝`PATCH_AK32_BITWISE_INSTRUCTIONS_V08`）・CALL/RET/stack は後続 `PATCH_AK32_STACK_CALL_RET_V08`・既存 opcode 0x00–0x0A 不変で末尾追記（0xFF 予約）・opcode 三重管理の単一化は任意先行 `PATCH_AK32_OPCODE_TABLE_V08`・既存互換維持**
 * [x] 次候補 `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08` の設計資料を作成した（2026-06-18）
   - `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・ROM/Input 優先（Input は LD で読め IN 命令不要）・VRAM/Storage は後続・新 device 無しは現行互換・分割案（INPUT 先行 → ROM）あり**
 * [ ] v0.8 テーマを確定する（候補: Device Expansion & Connection Validation）
