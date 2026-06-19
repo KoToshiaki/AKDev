@@ -133,11 +133,11 @@ _ROLE_BY_KIND = {
 }
 
 # kinds that have a runtime Part *today* (behaviour-preserving scope per patch).
-_RUNTIME_BACKED = {"cpu", "ram", "uart", "input", "rom"}
+_RUNTIME_BACKED = {"cpu", "ram", "uart", "input", "rom", "timer"}
 
 # stable runtime ids (must not change — bus tracing / signal overlay / tests).
 _RUNTIME_ID = {"cpu": "sim_cpu", "ram": "sim_ram", "uart": "sim_uart",
-               "input": "sim_input", "rom": "sim_rom"}
+               "input": "sim_input", "rom": "sim_rom", "timer": "sim_timer"}
 
 _LABEL_BY_KIND = {
     "cpu": "CPU", "ram": "RAM", "vram": "VRAM", "rom": "ROM", "uart": "UART",

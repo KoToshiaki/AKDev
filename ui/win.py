@@ -24,7 +24,7 @@ from core.devices import (
     get_memory_layout, apply_address_overrides,
 )
 from core.cpu import AK32Part
-from core.dev import RamPart, RomPart, UartPart, InputPart
+from core.dev import RamPart, RomPart, UartPart, InputPart, TimerPart
 from core.project import create_project, load_project, load_target, save_system
 from core.runtime import VirtualCircuitRuntime
 from core.sim import Bus
@@ -224,6 +224,11 @@ class MainWin(QMainWindow):
         # an Address Map Editor override gives it a base/size; game16 auto-places it.
         for node_id in plan.get("roms", []):
             specs.append(make_device_spec(node_id, self._part_of(node_id), layout=layout))
+        # PATCH_TIMER_DEVICE_V08: Timer (MMIO) nodes. Listed after UART/Input so the
+        # running MMIO index lands them at 0x0120 (UART 0x0100 / Input 0x0110 / Timer
+        # 0x0120). ROM is memory-role and does not consume an MMIO slot.
+        for node_id in plan.get("timers", []):
+            specs.append(make_device_spec(node_id, self._part_of(node_id), layout=layout))
         return mode, layout, assign_mmio_bases(specs, layout=layout)
 
     def _resolve_device_specs(self, plan: "dict | None"):
@@ -252,9 +257,9 @@ class MainWin(QMainWindow):
         comes from the layout (PATCH_CODE_REGION_MMIO_RELOCATION_V08; default 0x0000).
         """
         self._sim_ram = self._sim_uart = self._sim_cpu = None
-        self._sim_input = self._sim_rom = None
+        self._sim_input = self._sim_rom = self._sim_timer = None
         self._sim_ram_node = self._sim_uart_node = self._sim_cpu_node = None
-        self._sim_input_node = self._sim_rom_node = None
+        self._sim_input_node = self._sim_rom_node = self._sim_timer_node = None
         # PATCH_PROGRAM_TARGET_ROM_V08: when the program target is ROM and a ROM
         # runtime base is resolved, the CPU resets to the ROM base so it fetches the
         # program from ROM. The ROM spec can appear after the CPU spec, so resolve the
@@ -291,6 +296,12 @@ class MainWin(QMainWindow):
             elif kind == "input" and self._sim_input is None:
                 self._sim_input = InputPart("sim_input", "INPUT", base=spec["base"])
                 self._sim_input_node = spec["node_id"]
+            elif kind == "timer" and self._sim_timer is None and spec.get("base") is not None:
+                # Deterministic MMIO step counter (PATCH_TIMER_DEVICE_V08); the runtime
+                # advances it one tick per executed CPU step.
+                self._sim_timer = TimerPart("sim_timer", "TIMER",
+                                            base=spec["base"], size=spec["size"])
+                self._sim_timer_node = spec["node_id"]
             elif kind == "cpu" and self._sim_cpu is None:
                 self._sim_cpu = AK32Part("sim_cpu", "AK32", self._sim_bus,
                                          reset_pc=cpu_reset_pc)
@@ -325,6 +336,8 @@ class MainWin(QMainWindow):
             parts_by_id["sim_input"] = self._sim_input
         if self._sim_rom is not None:
             parts_by_id["sim_rom"] = self._sim_rom
+        if self._sim_timer is not None:
+            parts_by_id["sim_timer"] = self._sim_timer
         for dev in amap["devices"]:
             part = parts_by_id.get(dev.get("device_id"))
             if part is None:
@@ -335,7 +348,8 @@ class MainWin(QMainWindow):
         self._sim_bus.tracing = True      # enable bus tracing
         # Virtual circuit runtime — wraps the devices for stepped, traced execution.
         self._runtime = VirtualCircuitRuntime(
-            self._sim_bus, self._sim_ram, self._sim_uart, self._sim_cpu
+            self._sim_bus, self._sim_ram, self._sim_uart, self._sim_cpu,
+            timer=self._sim_timer,
         )
         self._runtime.plan = plan
         self._runtime.address_map = amap   # PATCH_ADDRESS_MAP_V07
@@ -926,9 +940,19 @@ class MainWin(QMainWindow):
         amap_lines  = format_address_map_summary(amap) if amap else []
         amap_issues = validate_address_map(amap) if amap else []
 
+        # PATCH_TIMER_DEVICE_V08: Timer tick/delta when a Timer device is placed.
+        timer = None
+        if self._sim_timer is not None:
+            timer = {
+                "tick":  self._sim_timer.tick_value(),
+                "delta": self._sim_timer.delta_value(),
+                "base":  self._sim_timer.base,
+            }
+
         return {
             "mode":        mode,
             "program_target": self._program_target_status(),
+            "timer":       timer,
             "target_cpu":  plan.get("target_cpu"),
             "ram_desc":    ram_desc,
             "uart_desc":   uart_desc,

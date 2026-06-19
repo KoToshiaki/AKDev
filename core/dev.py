@@ -250,3 +250,70 @@ class InputPart(Part):
     def clear_edge(self) -> None:
         """Clear the rising-edge bitmask."""
         self._edge = 0
+
+
+# ---------------------------------------------------------------------------
+# TimerPart — memory-mapped deterministic step counter (PATCH_TIMER_DEVICE_V08)
+# ---------------------------------------------------------------------------
+
+class TimerPart(Part):
+    """Minimal MMIO timer — a deterministic CPU-step counter (no wall clock).
+
+    The runtime calls :meth:`tick` once per executed CPU instruction, so the
+    value is fully reproducible in tests. Read with the existing ``LD`` and
+    cleared with the existing ``ST`` (no ``IN``/``OUT`` or new CPU instruction).
+
+    Register map (relative to base):
+      +0  TICK   read: current tick (monotonic step count) / write: clear tick (and DELTA base)
+      +4  DELTA  read: ticks since DELTA was last cleared    / write: clear DELTA base (= current tick)
+
+    The window is the standard MMIO size (0x08 = two 32-bit words). Writes ignore
+    the written value (write = "clear"), matching InputPart's CLEAR_EDGE style.
+    """
+
+    OFFSET_TICK  = 0
+    OFFSET_DELTA = 4
+
+    def __init__(self, part_id: str, name: str, base: int = 0, size: int = 8):
+        super().__init__(part_id, name)
+        self.base = base
+        self.size = size
+        self._tick: int = 0         # monotonic step count (32-bit)
+        self._delta_base: int = 0   # tick value at the last DELTA clear
+
+    # ---- Part interface ----
+
+    def reset(self) -> None:
+        self._tick = 0
+        self._delta_base = 0
+
+    def read(self, addr: int) -> int:
+        off = addr - self.base
+        if off == self.OFFSET_TICK:
+            return self._tick & 0xFFFFFFFF
+        if off == self.OFFSET_DELTA:
+            return (self._tick - self._delta_base) & 0xFFFFFFFF
+        return 0                    # defensive (same policy as UART/Input)
+
+    def write(self, addr: int, value: int) -> None:
+        off = addr - self.base
+        if off == self.OFFSET_TICK:         # clear tick (and DELTA base)
+            self._tick = 0
+            self._delta_base = 0
+        elif off == self.OFFSET_DELTA:      # clear DELTA only (rebase to now)
+            self._delta_base = self._tick
+        # other offsets: no-op
+
+    # ---- timer-specific helpers ----
+
+    def tick(self) -> None:
+        """Advance the timer by one CPU step (called by the runtime per step)."""
+        self._tick = (self._tick + 1) & 0xFFFFFFFF
+
+    def tick_value(self) -> int:
+        """Return the current tick (for Run Status / tests)."""
+        return self._tick & 0xFFFFFFFF
+
+    def delta_value(self) -> int:
+        """Return ticks since the last DELTA clear (for Run Status / tests)."""
+        return (self._tick - self._delta_base) & 0xFFFFFFFF

@@ -93,6 +93,11 @@
   - 次候補: `PATCH_AK32_SHIFT_IMM_BITWISE_V08` / `PATCH_AK32_BRANCH_EXPANSION_V08` / `PATCH_TIMER_DEVICE_V08`
 * [x] 次候補 `PATCH_TIMER_DEVICE_V08` の設計資料を作成した（2026-06-20）
   - `PATCH_TIMER_DEVICE_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・Timer は MMIO device（CPU 命令追加なし・既存 `LD`/`ST` で読む/clear）・deterministic tick（CPU step 数ベース・wall-clock 不使用）・割り込みなし・MMIO 窓 0x08（UART/Input と同じ）で自動配置 0x0120・registry は `_RUNTIME_BACKED`/`_RUNTIME_ID` のみ追加（kind/role/label は既存）・`runtime.step()` 後に `timer.tick()`・Timer 非配置は現行互換・Game Runtime Minimal の前段**
+* [x] `PATCH_TIMER_DEVICE_V08` 実装完了（2026-06-20・**Timer は MMIO device・CPU 命令追加なし・Timer 非配置は現行互換**）
+  - `core/devices.py`（`_RUNTIME_BACKED`/`_RUNTIME_ID` に timer）/ `core/dev.py`（`TimerPart`・TICK/DELTA・tick()/reset()・write=clear・32bit mask）/ `core/circuit.py`（`plan["timers"]`）/ `core/runtime.py`（`VirtualCircuitRuntime(timer=…)`・`step()` で `timer.tick()`・reset/load で reset）/ `ui/win.py`（`self._sim_timer`・`_auto_device_specs`/`_build_runtime_devices`・Run Status timer）/ `ui/run_status.py`（`Timer:` 行）。`parts/io/timer/part.json` は既存を流用（変更なし）
+  - deterministic tick（CPU step 数・wall-clock 不使用・割り込みなし）。UART+Input+Timer で 0x0100/0x0110/0x0120。CPU は既存 `LD` で read・`ST` で clear。`tests/test_timer_device_v08.py`（25 件）・`tests/test/system.json` 差分なし
+  - `python -m pytest tests/` → **1136 passed**（1111 + 新規 25）
+  - 次候補: `PATCH_VRAM_DEVICE_V08` / `PATCH_GAME_RUNTIME_MINIMAL_V08` / `PATCH_V08_STABILIZE_AND_DOCS`
 * [x] 次候補 `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08` の設計資料を作成した（2026-06-18）
   - `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・ROM/Input 優先（Input は LD で読め IN 命令不要）・VRAM/Storage は後続・新 device 無しは現行互換・分割案（INPUT 先行 → ROM）あり**
 * [ ] v0.8 テーマを確定する（候補: Device Expansion & Connection Validation）

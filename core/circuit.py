@@ -48,6 +48,10 @@ def _is_rom(node: dict) -> bool:
     return _node_kind(node) == "rom"
 
 
+def _is_timer(node: dict) -> bool:
+    return _node_kind(node) == "timer"
+
+
 def resolve_circuit(nodes: list[dict], connections: list[dict],
                     target_cpu_id: "str | None" = None) -> dict:
     """Resolve a CircuitPlan from canvas *nodes* and *connections*.
@@ -98,7 +102,8 @@ def resolve_circuit(nodes: list[dict], connections: list[dict],
         return {
             "ok": False, "issues": ["no CPU part on canvas"],
             "cpu": None, "target_cpu": None,
-            "rams": [], "uarts": [], "inputs": [], "roms": [], "devices": [],
+            "rams": [], "uarts": [], "inputs": [], "roms": [], "timers": [],
+            "devices": [],
             "cpu_present": False,
         }
 
@@ -113,7 +118,8 @@ def resolve_circuit(nodes: list[dict], connections: list[dict],
             "ok": False,
             "issues": [f"multiple CPU parts ({len(cpus)}). Select one CPU to run."],
             "cpu": None, "target_cpu": None,
-            "rams": [], "uarts": [], "inputs": [], "roms": [], "devices": [],
+            "rams": [], "uarts": [], "inputs": [], "roms": [], "timers": [],
+            "devices": [],
             "cpu_present": True,
         }
 
@@ -129,6 +135,10 @@ def resolve_circuit(nodes: list[dict], connections: list[dict],
     # A convenience key like rams/uarts/inputs; ROM is also in conn_devices below.
     conn_roms = sorted(n["node_id"] for n in nodes
                        if _is_rom(n) and wired(target, n["node_id"]))
+    # Timer (mmio role) wired to the target CPU (PATCH_TIMER_DEVICE_V08). Convenience
+    # key like rams/uarts/inputs; Timer is also in conn_devices below.
+    conn_timers = sorted(n["node_id"] for n in nodes
+                         if _is_timer(n) and wired(target, n["node_id"]))
     # All addressable (memory/mmio) devices wired to the target CPU, for future
     # device kinds (PATCH_INPUT_DEVICE_V08). Existing rams/uarts keys are unchanged.
     conn_devices = sorted(
@@ -158,6 +168,7 @@ def resolve_circuit(nodes: list[dict], connections: list[dict],
         "uarts": conn_uarts,
         "inputs": conn_inputs,
         "roms": conn_roms,
+        "timers": conn_timers,
         "devices": conn_devices,
         "cpu_present": cpu_present,
     }

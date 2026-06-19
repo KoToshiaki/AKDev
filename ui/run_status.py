@@ -74,6 +74,15 @@ def render_status(status: dict) -> str:
     lines: list[str] = ["=== Run Status ===", f"Mode: {mode}"]
     # PATCH_PROGRAM_TARGET_ROM_V08: show the current Write Program load target.
     lines.append(f"Program Target: {status.get('program_target', 'RAM')}")
+    # PATCH_TIMER_DEVICE_V08: show Timer tick/delta when a Timer device is placed.
+    timer = status.get("timer")
+    if timer:
+        lines.append(
+            f"Timer: tick={timer.get('tick', 0)} delta={timer.get('delta', 0)}"
+            f" @0x{timer.get('base', 0):04x}"
+        )
+    else:
+        lines.append("Timer: None")
 
     # ---- Target / Circuit ----
     lines.append(f"Target CPU: {status.get('target_cpu') or 'None'}")

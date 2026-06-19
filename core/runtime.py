@@ -81,11 +81,14 @@ class VirtualCircuitRuntime:
     one instruction and returns a trace dict; ``run()`` is just repeated ``step()``.
     """
 
-    def __init__(self, bus, ram, uart, cpu):
+    def __init__(self, bus, ram, uart, cpu, timer=None):
         self.bus  = bus
         self.ram  = ram
         self.uart = uart
         self.cpu  = cpu
+        # Optional MMIO timer (PATCH_TIMER_DEVICE_V08). None when no Timer device is
+        # placed -> behaviour is identical to before (no tick advance / reset).
+        self.timer = timer
         self.loaded: bool = False
         self.loaded_program: "dict | None" = None
         self.step_count: int = 0
@@ -104,6 +107,8 @@ class VirtualCircuitRuntime:
         self.ram.load_bytes(binary)
         self.uart.reset()
         self.cpu.reset()
+        if self.timer is not None:
+            self.timer.reset()
         self.bus.clear_trace()
         self.bus.reset_transactions()
         self.step_count = 0
@@ -120,6 +125,8 @@ class VirtualCircuitRuntime:
         """Reset CPU + UART (RAM keeps the loaded program), clear trace state."""
         self.cpu.reset()
         self.uart.reset()
+        if self.timer is not None:
+            self.timer.reset()
         self.bus.clear_trace()
         self.bus.reset_transactions()
         self.step_count = 0
@@ -158,6 +165,8 @@ class VirtualCircuitRuntime:
             self.bus.on_access = None
 
         self.step_count += 1
+        if self.timer is not None:      # deterministic tick: 1 per executed step
+            self.timer.tick()
         pc_after    = self.cpu.pc()
         regs_after  = self.cpu.regs()
         uart_after  = self.uart.output_text()

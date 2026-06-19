@@ -84,11 +84,12 @@ v0.8 は、この実行基盤の上で **接続の妥当性検証** と **デバ
   disasm の 3 か所に追記。**Input bit 判定が可能**（`LD`+`AND`+`BEQ`・押下/非押下を実証）。ROM target からも fetch/execute。
   既存 opcode 0x00–0x0A 不変・0xFF は unknown のまま。`CALL`/`RET`/stack は後続 `PATCH_AK32_STACK_CALL_RET_V08`。
   `python -m pytest tests/` → 1111 passed（+31）。次候補 `PATCH_AK32_SHIFT_IMM_BITWISE_V08` / `PATCH_AK32_BRANCH_EXPANSION_V08` / `PATCH_TIMER_DEVICE_V08`。
-- **次候補として `PATCH_TIMER_DEVICE_V08`（MMIO Timer）を検討中**。**deterministic tick（CPU step 数ベース・wall-clock 不使用）**。
-  CPU から既存 `LD/ST` で読む/clear する（CPU 命令追加なし・割り込みなし）。MMIO 窓は UART/Input と同じ 0x08（stride 0x10）で
-  自動配置 0x0120。registry は `_KIND/_ROLE/_LABEL` 既存・`_RUNTIME_BACKED`/`_RUNTIME_ID` のみ追加。`runtime.step()` 後に
-  `timer.tick()`。**Game Runtime Minimal の前段**（Timer→VRAM→Game Runtime→Stabilize）。設計資料:
-  `PATCH_TIMER_DEVICE_V08_ROADMAP.md` / `..._CHECKLIST.md`（実装は未着手）。
+- **`PATCH_TIMER_DEVICE_V08` 実装完了**（MMIO Timer・`io.timer` / `TimerPart` / `sim_timer`）。**deterministic tick（CPU step 数
+  ベース・wall-clock 不使用・割り込みなし）**。CPU から既存 `LD` で読み・`ST` で clear（CPU 命令追加なし）。MMIO 窓 0x08（stride
+  0x10）で UART+Input+Timer は 0x0100/0x0110/0x0120 に自動配置。registry は `_RUNTIME_BACKED`/`_RUNTIME_ID` に timer 追加
+  （kind/role/label は既存）。`VirtualCircuitRuntime(timer=…)` が `step()` の step_count++ 後に `timer.tick()`・reset/load で reset。
+  Run Status に `Timer:` 行。**Timer 非配置は現行互換**（dict 一致・Hello World/legacy 不変）。`python -m pytest tests/` → 1136
+  passed（+25）。**Game Runtime Minimal の前段**（次: VRAM→Game Runtime→Stabilize）。設計資料: `PATCH_TIMER_DEVICE_V08_ROADMAP.md` / `..._CHECKLIST.md`。
 
 ### E. Address Map Editor
 - ユーザーによる base/size の任意編集 UI（v0.7 は固定既定）。
