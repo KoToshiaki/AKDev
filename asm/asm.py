@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Toshiaki Kou
 # SPDX-License-Identifier: BSD-3-Clause
-"""AK32 assembler — NOP / HALT / LDI / OUT / ADD / SUB / LD / ST / JMP / BEQ / ADDI.
+"""AK32 assembler — NOP / HALT / LDI / OUT / ADD / SUB / LD / ST / JMP / BEQ / ADDI / AND / OR / XOR / NOT.
 
 Instruction encoding (32-bit fixed length, little-endian output)
 -----------------------------------------------------------------
@@ -14,6 +14,7 @@ Opcodes
 NOP=0x00  HALT=0x01  LDI=0x02  OUT=0x03
 ADD=0x04  SUB=0x05  LD=0x06   ST=0x07
 JMP=0x08  BEQ=0x09  ADDI=0x0A
+AND=0x0B  OR=0x0C   XOR=0x0D   NOT=0x0E   (PATCH_AK32_BITWISE_INSTRUCTIONS_V08)
 """
 from __future__ import annotations
 
@@ -129,6 +130,8 @@ _OPCODES = {
     'NOP':  0x00, 'HALT': 0x01, 'LDI':  0x02, 'OUT':  0x03,
     'ADD':  0x04, 'SUB':  0x05, 'LD':   0x06, 'ST':   0x07,
     'JMP':  0x08, 'BEQ':  0x09, 'ADDI': 0x0A,
+    # PATCH_AK32_BITWISE_INSTRUCTIONS_V08
+    'AND':  0x0B, 'OR':   0x0C, 'XOR':  0x0D, 'NOT':  0x0E,
 }
 
 
@@ -265,6 +268,23 @@ def assemble_ex(text: str) -> tuple[bytes, dict[int, int]]:
             rs   = _parse_reg(args[1], lineno)
             imm8 = _parse_imm(args[2], lineno, bits=8)
             result += _pack((0x0A << 24) | (rd << 16) | (rs << 8) | imm8)
+
+        # PATCH_AK32_BITWISE_INSTRUCTIONS_V08: AND/OR/XOR are 3-operand R-type
+        # (same form as ADD/SUB); NOT is 2-operand (rt slot stays 0).
+        elif mnem in ('AND', 'OR', 'XOR'):
+            if len(args) != 3:
+                raise AsmError(lineno, f"{mnem} requires 3 operands, got {len(args)}")
+            rd = _parse_reg(args[0], lineno)
+            rs = _parse_reg(args[1], lineno)
+            rt = _parse_reg(args[2], lineno)
+            result += _pack((_OPCODES[mnem] << 24) | (rd << 16) | (rs << 8) | rt)
+
+        elif mnem == 'NOT':
+            if len(args) != 2:
+                raise AsmError(lineno, f"NOT requires 2 operands, got {len(args)}")
+            rd = _parse_reg(args[0], lineno)
+            rs = _parse_reg(args[1], lineno)
+            result += _pack((0x0E << 24) | (rd << 16) | (rs << 8))
 
         else:
             raise AsmError(lineno, f"unknown mnemonic {tokens[0]!r}")

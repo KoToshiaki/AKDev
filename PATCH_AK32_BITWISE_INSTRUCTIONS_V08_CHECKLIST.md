@@ -1,7 +1,7 @@
 # PATCH_AK32_BITWISE_INSTRUCTIONS_V08 — CHECKLIST（設計資料）
 
 > 設計詳細は `PATCH_AK32_BITWISE_INSTRUCTIONS_V08_ROADMAP.md` を参照。
-> 本書は**実装時に使うチェックリスト**。現状は **設計のみ完了・実装は未着手**。
+> 本書は**実装時に使うチェックリスト**。**実装完了（2026-06-20・`python -m pytest tests/` 1111 passed）**。
 > 親設計 `PATCH_AK32_INSTRUCTION_EXPANSION_V08` の Phase 1。対象は `AND`/`OR`/`XOR`/`NOT` の 4 命令のみ。
 > opcode 単一化・shift・immediate bitwise・branch 拡張・CALL/RET/stack・IN は対象外。commit/push は未実施。
 
@@ -36,36 +36,38 @@
 * [x] 既存互換方針（opcode 不変・既存 binary 同挙動・Hello World/selftest/fib/legacy/Input/ROM/Program Target 不変・0xFF halt）
 * [x] opcode 単一化は今回やらず別パッチ `PATCH_AK32_OPCODE_TABLE_V08` として記録・3 か所整合はテストで担保
 
-## 2. 実装予定（今回は未実装）
+## 2. 実装（`core/cpu.py` / `asm/asm.py` / `core/runtime.py`）
 
-* [ ] CPU opcode 定数追加（`core/cpu.py` `OP_AND=0x0B` / `OP_OR=0x0C` / `OP_XOR=0x0D` / `OP_NOT=0x0E`）
-* [ ] CPU execute 追加（`_execute` に 4 分岐・`_set_reg`・Z 更新・docstring 更新）
-* [ ] ASM opcode 追加（`asm/asm.py` `_OPCODES` に 4 命令）
-* [ ] ASM encode 追加（pass 2 に 4 分岐・operand 数チェック・docstring 更新）
-* [ ] disasm 追加（`core/runtime.py:disasm` に 4 命令の表示分岐）
-* [ ] tests 追加（`tests/test_ak32_bitwise_instructions_v08.py`）
-* [ ] docs/checklist 更新（本 CHECKLIST・`CHECKLIST8.md` 最小追記）
+* [x] CPU opcode 定数追加（`core/cpu.py` `OP_AND=0x0B` / `OP_OR=0x0C` / `OP_XOR=0x0D` / `OP_NOT=0x0E`）
+* [x] CPU execute 追加（`_execute` に 4 分岐・`_set_reg`・Z 更新・32bit mask・docstring を 15 命令に更新）
+* [x] ASM opcode 追加（`asm/asm.py` `_OPCODES` に 4 命令）
+* [x] ASM encode 追加（pass 2 に `AND/OR/XOR`（3 オペランド）+ `NOT`（2 オペランド）分岐・operand 数チェック・docstring 更新）
+* [x] disasm 追加（`core/runtime.py:disasm` に 4 命令の表示分岐・`DW` フォールバック不変）
+* [x] tests 追加（`tests/test_ak32_bitwise_instructions_v08.py` — 31 件）
+* [x] docs/checklist 更新（本 CHECKLIST・`CHECKLIST8.md` / `ROADMAP8.md` 最小追記）
 
-## 3. テスト予定
+## 3. テスト（`tests/test_ak32_bitwise_instructions_v08.py` — 31 件）
 
-* [ ] ASM encode（`AND`/`OR`/`XOR` 3 オペランド・`NOT` 2 オペランドの bytes）
-* [ ] ASM error（`AND r1, r2` / `NOT r1, r2, r3` が `AsmError`）
-* [ ] CPU execute（`AND`/`OR`/`XOR`/`NOT` の結果）
-* [ ] Z flag（結果==0 で true）
-* [ ] r0（`AND r0, ...` で r0=0 維持）
-* [ ] 32bit mask（`NOT` で上位ビット mask）
-* [ ] disasm（4 命令の文字列化・unknown は `DW`）
-* [ ] opcode 整合（CPU `OP_*` と ASM `_OPCODES` の値一致）
-* [ ] Input integration（押下/非押下で分岐）
-* [ ] ROM target integration（ROM から fetch/execute）
-* [ ] existing tests（Hello World / ram_selftest / fib / legacy / Input / ROM / Program Target / unknown=halt 不変）
+* [x] ASM encode（`AND`/`OR`/`XOR` 3 オペランド・`NOT` 2 オペランドの bytes・小文字+コメント）
+* [x] ASM error（`AND/OR/XOR r1, r2` / `NOT r1, r2, r3` / 不正レジスタが `AsmError`）
+* [x] CPU execute（`AND`/`OR`/`XOR`/`NOT` の結果・`NOT 0`→0xFFFFFFFF・`NOT 0xFFFFFFFF`→0）
+* [x] Z flag（結果==0 で true・`XOR rx,rx`・非0 で false）
+* [x] r0（`AND r0,...` / `NOT r0,...` で r0=0 維持）
+* [x] 32bit mask（`NOT`・`OR` 高位ビット）
+* [x] PC +4（bitwise は分岐しない）
+* [x] disasm（4 命令の文字列化・unknown は `DW 0x..`）
+* [x] opcode 整合（`AK32Part.OP_*` == `_OPCODES[...]`・既存 0x00–0x0A 不変）
+* [x] Input integration（押下 r4==1 / 非押下 r4==0・`LD`+`AND`+`BEQ`）
+* [x] ROM target integration（ROM 0x0000 から OR を fetch/execute・r3==0x00FF・reset_pc=rom.base）
+* [x] existing tests（Hello World / ram_selftest / fib / legacy / Input / ROM / Program Target / `test_unknown_opcode_halts` 不変）
 
-## 4. 検証予定
+## 4. 検証
 
-* [ ] `python -m pytest tests/`（全通過・新規テスト込み）
-* [ ] bitwise simple program（`AND`/`OR`/`XOR`/`NOT` 手動確認）
-* [ ] Input bit 判定 program（キーマスク → 分岐）
-* [ ] ROM target bitwise program（ROM から fetch/execute）
+* [x] `python -m pytest tests/` 全件通過 — **1111 passed**（1080 + 31）
+* [x] bitwise simple program（assemble→execute の OR round-trip テストで実証）
+* [x] Input bit 判定 program（押下/非押下の両ケース・テストで実証）
+* [x] ROM target bitwise program（ROM から fetch/execute・テストで実証）
+* [x] `tests/test/system.json` に差分なし
 
 ## 5. 完了条件
 

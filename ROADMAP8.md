@@ -79,10 +79,11 @@ v0.8 は、この実行基盤の上で **接続の妥当性検証** と **デバ
   後続 `PATCH_AK32_STACK_CALL_RET_V08` へ。opcode は既存 0x00–0x0A 不変・末尾追記（0xFF 予約）。opcode 三重管理
   （cpu/asm/disasm）の単一化は任意先行 `PATCH_AK32_OPCODE_TABLE_V08`。設計資料:
   `PATCH_AK32_INSTRUCTION_EXPANSION_V08_ROADMAP.md` / `..._CHECKLIST.md`（実装は未着手）。
-- **最初の子パッチとして `PATCH_AK32_BITWISE_INSTRUCTIONS_V08` を検討中**（`AND`/`OR`/`XOR`/`NOT`・opcode 0x0B–0x0E）。
-  **Input bit 判定に直結**（`LD`+`AND`+`BEQ`）。`AND`/`OR`/`XOR` は 3 オペランド・`NOT` は 2 オペランド。CPU/ASM/disasm の
-  3 か所追記・既存 opcode 不変・`CALL`/`RET`/stack は後続。設計資料: `PATCH_AK32_BITWISE_INSTRUCTIONS_V08_ROADMAP.md` /
-  `..._CHECKLIST.md`（実装は未着手）。
+- **`PATCH_AK32_BITWISE_INSTRUCTIONS_V08` 実装完了**（`AND`=0x0B/`OR`=0x0C/`XOR`=0x0D/`NOT`=0x0E）。`AND`/`OR`/`XOR` は
+  3 オペランド・`NOT` は 2 オペランド。CPU（`_execute`・`_set_reg`・Z 更新・32bit mask）/ ASM（`_OPCODES`+encode）/
+  disasm の 3 か所に追記。**Input bit 判定が可能**（`LD`+`AND`+`BEQ`・押下/非押下を実証）。ROM target からも fetch/execute。
+  既存 opcode 0x00–0x0A 不変・0xFF は unknown のまま。`CALL`/`RET`/stack は後続 `PATCH_AK32_STACK_CALL_RET_V08`。
+  `python -m pytest tests/` → 1111 passed（+31）。次候補 `PATCH_AK32_SHIFT_IMM_BITWISE_V08` / `PATCH_AK32_BRANCH_EXPANSION_V08` / `PATCH_TIMER_DEVICE_V08`。
 
 ### E. Address Map Editor
 - ユーザーによる base/size の任意編集 UI（v0.7 は固定既定）。

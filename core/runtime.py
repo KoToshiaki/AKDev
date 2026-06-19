@@ -57,6 +57,15 @@ def disasm(word: int) -> str:
         return f"BEQ r{rd}, r{rs}, {rel}"
     if op == AK32Part.OP_ADDI:
         return f"ADDI r{rd}, r{rs}, {imm8}"
+    # PATCH_AK32_BITWISE_INSTRUCTIONS_V08
+    if op == AK32Part.OP_AND:
+        return f"AND r{rd}, r{rs}, r{rt}"
+    if op == AK32Part.OP_OR:
+        return f"OR r{rd}, r{rs}, r{rt}"
+    if op == AK32Part.OP_XOR:
+        return f"XOR r{rd}, r{rs}, r{rt}"
+    if op == AK32Part.OP_NOT:
+        return f"NOT r{rd}, r{rs}"
     return f"DW 0x{word:08x}"   # unknown opcode (would halt the CPU)
 
 

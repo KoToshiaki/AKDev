@@ -1,13 +1,13 @@
 # SPDX-FileCopyrightText: 2026 Toshiaki Kou
 # SPDX-License-Identifier: BSD-3-Clause
-"""AK32 CPU emulator — NOP / HALT / LDI / OUT / ADD / SUB / LD / ST / JMP / BEQ / ADDI."""
+"""AK32 CPU emulator — NOP / HALT / LDI / OUT / ADD / SUB / LD / ST / JMP / BEQ / ADDI / AND / OR / XOR / NOT."""
 from __future__ import annotations
 
 from core.sim import BusError, Bus, Part
 
 
 class AK32Part(Part):
-    """AK32 CPU with 11-instruction ISA.
+    """AK32 CPU with 15-instruction ISA.
 
     32-bit fixed-length instruction encoding
     ----------------------------------------
@@ -29,9 +29,13 @@ class AK32Part(Part):
     0x08  JMP  imm16       — pc = imm16
     0x09  BEQ  rs, rt, rel8 — if regs[rs]==regs[rt]: pc += signed(rel8)*4
     0x0A  ADDI rd, rs, imm8 — regs[rd] = regs[rs] + imm8
+    0x0B  AND  rd, rs, rt  — regs[rd] = regs[rs] & regs[rt]   (PATCH_AK32_BITWISE_INSTRUCTIONS_V08)
+    0x0C  OR   rd, rs, rt  — regs[rd] = regs[rs] | regs[rt]
+    0x0D  XOR  rd, rs, rt  — regs[rd] = regs[rs] ^ regs[rt]
+    0x0E  NOT  rd, rs      — regs[rd] = ~regs[rs] (32-bit)
 
     r0 is hardwired to 0 and cannot be written.
-    Z flag is updated by LDI, ADD, SUB, LD, ADDI (result == 0).
+    Z flag is updated by LDI, ADD, SUB, LD, ADDI, AND, OR, XOR, NOT (result == 0).
     BEQ does not update Z; it compares rs==rt internally.
     """
 
@@ -46,6 +50,10 @@ class AK32Part(Part):
     OP_JMP  = 0x08
     OP_BEQ  = 0x09
     OP_ADDI = 0x0A
+    OP_AND  = 0x0B          # PATCH_AK32_BITWISE_INSTRUCTIONS_V08
+    OP_OR   = 0x0C
+    OP_XOR  = 0x0D
+    OP_NOT  = 0x0E
 
     _NREGS = 16
 
@@ -165,6 +173,29 @@ class AK32Part(Part):
             result = self._regs[rs] + imm8
             self._set_reg(rd, result)
             self._z = ((result & 0xFFFFFFFF) == 0)
+
+        elif op == self.OP_AND:
+            rt     = imm8
+            result = self._regs[rs] & self._regs[rt]
+            self._set_reg(rd, result)
+            self._z = ((result & 0xFFFFFFFF) == 0)
+
+        elif op == self.OP_OR:
+            rt     = imm8
+            result = self._regs[rs] | self._regs[rt]
+            self._set_reg(rd, result)
+            self._z = ((result & 0xFFFFFFFF) == 0)
+
+        elif op == self.OP_XOR:
+            rt     = imm8
+            result = self._regs[rs] ^ self._regs[rt]
+            self._set_reg(rd, result)
+            self._z = ((result & 0xFFFFFFFF) == 0)
+
+        elif op == self.OP_NOT:
+            result = (~self._regs[rs]) & 0xFFFFFFFF
+            self._set_reg(rd, result)
+            self._z = (result == 0)
 
         else:
             self._halted = True     # unknown opcode → halt
