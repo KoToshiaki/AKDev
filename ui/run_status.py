@@ -83,6 +83,14 @@ def render_status(status: dict) -> str:
         )
     else:
         lines.append("Timer: None")
+    # PATCH_VRAM_DEVICE_V08: show VRAM base/size when a VRAM device is placed.
+    vram = status.get("vram")
+    if vram:
+        lines.append(
+            f"VRAM: base=0x{vram.get('base', 0):04x} size=0x{vram.get('size', 0):04x}"
+        )
+    else:
+        lines.append("VRAM: None")
 
     # ---- Target / Circuit ----
     lines.append(f"Target CPU: {status.get('target_cpu') or 'None'}")

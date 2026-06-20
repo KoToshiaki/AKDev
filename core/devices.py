@@ -48,6 +48,11 @@ class MemoryLayout:
     # dedicated ROM region; circuit_compat / legacy keep RAM-load behaviour (None).
     rom_base: "int | None" = None
     rom_size: "int | None" = None
+    # VRAM region (PATCH_VRAM_DEVICE_V08). None == this layout has no auto VRAM region
+    # (VRAM must then be placed via an Address Map Editor override). game16 carves a
+    # dedicated VRAM region; circuit_compat / legacy keep no VRAM (None).
+    vram_base: "int | None" = None
+    vram_size: "int | None" = None
 
 
 # legacy fixed circuit (no CPU on canvas): 256 B RAM + UART @0x0100 (adjacent).
@@ -72,6 +77,7 @@ GAME16 = MemoryLayout(
     mmio_base=0xE000, mmio_stride=0x10, mmio_size=0x08, mmio_inside_ram=False,
     code_base=0x0000, reset_pc=0x0000, stack_top=0xBFFF,
     rom_base=0x0000, rom_size=0x8000,
+    vram_base=0xC000, vram_size=0x0400,   # PATCH_VRAM_DEVICE_V08 (32x32 @1B/px)
 )
 
 _LAYOUTS = {"legacy": LEGACY, "circuit": CIRCUIT_COMPAT,
@@ -133,11 +139,12 @@ _ROLE_BY_KIND = {
 }
 
 # kinds that have a runtime Part *today* (behaviour-preserving scope per patch).
-_RUNTIME_BACKED = {"cpu", "ram", "uart", "input", "rom", "timer"}
+_RUNTIME_BACKED = {"cpu", "ram", "uart", "input", "rom", "timer", "vram"}
 
 # stable runtime ids (must not change — bus tracing / signal overlay / tests).
 _RUNTIME_ID = {"cpu": "sim_cpu", "ram": "sim_ram", "uart": "sim_uart",
-               "input": "sim_input", "rom": "sim_rom", "timer": "sim_timer"}
+               "input": "sim_input", "rom": "sim_rom", "timer": "sim_timer",
+               "vram": "sim_vram"}
 
 _LABEL_BY_KIND = {
     "cpu": "CPU", "ram": "RAM", "vram": "VRAM", "rom": "ROM", "uart": "UART",
@@ -190,6 +197,11 @@ def _base_size(kind: str, layout: MemoryLayout):
         # circuit_compat / legacy return (None, None) so ROM needs an Address Map
         # Editor override to be placed (PATCH_ROM_DEVICE_V08).
         return layout.rom_base, layout.rom_size
+    if kind == "vram":
+        # VRAM auto base/size only when the layout defines a VRAM region (game16);
+        # circuit_compat / legacy return (None, None) so VRAM needs an Address Map
+        # Editor override to be placed (PATCH_VRAM_DEVICE_V08).
+        return layout.vram_base, layout.vram_size
     if kind == "uart":
         return layout.mmio_base, layout.mmio_size
     return None, None

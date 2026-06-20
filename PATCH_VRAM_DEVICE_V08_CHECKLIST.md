@@ -1,7 +1,7 @@
 # PATCH_VRAM_DEVICE_V08 — CHECKLIST（設計資料）
 
 > 設計詳細は `PATCH_VRAM_DEVICE_V08_ROADMAP.md` を参照。
-> 本書は**実装時に使うチェックリスト**。現状は **設計のみ完了・実装は未着手**。
+> 本書は**実装時に使うチェックリスト**。現状は **実装完了・テスト全通過（1164 passed）**。
 > VRAM は **書き込み可能な memory device**（CPU 命令追加なし・既存 `LD`/`ST`・reset で 0 クリア）。表示 UI は後続。commit/push は未実施。
 
 ---
@@ -35,34 +35,34 @@
 * [x] テスト方針（part/registry/Address Map/VramPart/CPU LD・ST/ROM target+VRAM/既存互換）
 * [x] 既存互換方針（VRAM 非配置は dict 一致・CPU 命令/ASM 不変・system.json 差分なし）
 
-## 2. 実装予定（今回は未実装）
+## 2. 実装（完了）
 
-* [ ] part.json 追加 or 既存確認（`parts/mem/vram/part.json`・v2）
-* [ ] device registry 追加（`core/devices.py` `_RUNTIME_BACKED` に vram / `_RUNTIME_ID["vram"]="sim_vram"` / `_base_size` vram 分岐 / `MemoryLayout` に `vram_base`/`vram_size`（GAME16 値・採否は実装時））
-* [ ] VramPart 追加（`core/dev.py` — 32bit word read/write・reset 0 クリア・dump/pixel/set_pixel・範囲外 BusError）
-* [ ] resolve_circuit vrams 追加（`core/circuit.py` `_is_vram` + `plan["vrams"]`・早期 return に vrams:[]・devices は既収集）
-* [ ] runtime 生成（`ui/win.py` `_auto_device_specs` で vrams を spec 化 / `_build_runtime_devices` で 1 個目 VRAM（base 有り）を runtime 化・`self._sim_vram` / `_sim_vram_node`・parts_by_id に sim_vram・`seen_vram` dedup）
-* [ ] Address Map 統合（VRAM が memory device として載る・既存 `build_address_map_from_devices` で動作・Editor override 対応）
-* [ ] Run Status 表示（`ui/run_status.py` 可能なら `VRAM: base=.. size=..`）
-* [ ] tests 追加（`tests/test_vram_device_v08.py`）
-* [ ] checklist 更新（本 CHECKLIST・`CHECKLIST8.md` / `ROADMAP8.md` 最小追記）
+* [x] part.json 追加 or 既存確認（`parts/mem/vram/part.json`・v2・ports bus/clk/reset）
+* [x] device registry 追加（`core/devices.py` `_RUNTIME_BACKED` に vram / `_RUNTIME_ID["vram"]="sim_vram"` / `_base_size` vram 分岐 / `MemoryLayout` に `vram_base`/`vram_size`・GAME16=0xC000/0x0400 採用）
+* [x] VramPart 追加（`core/dev.py` — 32bit LE word read/write・reset 0 クリア・dump/pixel/set_pixel・範囲外 BusError）
+* [x] resolve_circuit vrams 追加（`core/circuit.py` `_is_vram` + `plan["vrams"]`・早期 return に vrams:[]・devices は既収集）
+* [x] runtime 生成（`ui/win.py` `_auto_device_specs` で vrams を spec 化 / `_build_runtime_devices` で 1 個目 VRAM（base 有り）を runtime 化・`self._sim_vram` / `_sim_vram_node`・parts_by_id に sim_vram・`seen_vram` dedup）
+* [x] Address Map 統合（VRAM が memory device として載る・既存 `build_address_map_from_devices` で動作・Editor override 対応）
+* [x] Run Status 表示（`ui/run_status.py` `VRAM: base=.. size=..` / 非配置は `VRAM: None`）
+* [x] tests 追加（`tests/test_vram_device_v08.py` — 28 件）
+* [x] checklist 更新（本 CHECKLIST・旧 `test_device_registry_refactor_v08.py` の vram runtime-backed 化に伴う 2 件を更新）
 
-## 3. テスト予定
+## 3. テスト（完了）
 
-* [ ] part/library（`mem.vram` が出る・v2 正規化）
-* [ ] device registry（kind=vram・role=memory・RAM 扱いしない・addressable・runtime_backed・runtime_id sim_vram・make_device_spec）
-* [ ] Address Map（VRAM が載る・override で配置・VRAM/RAM overlap=error・VRAM 無しは dict 一致）
-* [ ] VramPart unit（read/write 32bit word・reset 0 クリア・dump・pixel/set_pixel・範囲外 BusError）
-* [ ] CPU LD/ST integration（`ST` で VRAM 書込・`LD` で読取・MainWin override 配置）
-* [ ] ROM target + VRAM（ROM からコード fetch しつつ VRAM へ書く）
-* [ ] existing tests（Hello World / ram_selftest / Input / ROM / Program Target / Bitwise / Timer 不変）
+* [x] part/library（`mem.vram` が出る・v2 正規化）
+* [x] device registry（kind=vram・role=memory・RAM 扱いしない・addressable・runtime_backed・runtime_id sim_vram・make_device_spec）
+* [x] Address Map（VRAM が載る・override で配置・VRAM/RAM overlap=error・VRAM 無しは dict 一致）
+* [x] VramPart unit（read/write 32bit word・reset 0 クリア・dump・pixel/set_pixel・範囲外 BusError）
+* [x] CPU LD/ST integration（`ST` で VRAM 書込・`LD` で読取・MainWin override 配置）
+* [x] ROM target + VRAM（ROM からコード fetch しつつ VRAM へ書く）
+* [x] existing tests（Hello World / ram_selftest / Input / ROM / Program Target / Bitwise / Timer 不変）
 
-## 4. 検証予定
+## 4. 検証（完了）
 
-* [ ] `python -m pytest tests/`（全通過・新規テスト込み）
-* [ ] VRAM write/read sample（`ST [base], r` → `LD r2, [base]`）
-* [ ] ROM target + VRAM sample（ROM から VRAM へ書く）
-* [ ] Address Map Editor override 確認（VRAM base/size 配置・RAM 縮小）
+* [x] `python -m pytest tests/`（**1164 passed**・新規テスト込み）
+* [x] VRAM write/read sample（`ST [base], r` → `LD r2, [base]`・`test_cpu_writes_and_reads_vram`）
+* [x] ROM target + VRAM sample（ROM から VRAM へ書く・`test_rom_target_writes_vram`）
+* [x] Address Map Editor override 確認（VRAM base/size 配置・RAM 縮小・`test_vram_runtime_built_with_override`）
 
 ## 5. 完了条件
 

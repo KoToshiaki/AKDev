@@ -90,11 +90,13 @@ v0.8 は、この実行基盤の上で **接続の妥当性検証** と **デバ
   （kind/role/label は既存）。`VirtualCircuitRuntime(timer=…)` が `step()` の step_count++ 後に `timer.tick()`・reset/load で reset。
   Run Status に `Timer:` 行。**Timer 非配置は現行互換**（dict 一致・Hello World/legacy 不変）。`python -m pytest tests/` → 1136
   passed（+25）。**Game Runtime Minimal の前段**（次: VRAM→Game Runtime→Stabilize）。設計資料: `PATCH_TIMER_DEVICE_V08_ROADMAP.md` / `..._CHECKLIST.md`。
-- **次候補として `PATCH_VRAM_DEVICE_V08`（最小 framebuffer）を検討中**。`mem.vram`（kind=vram・role=memory・writable・reset 0
+- **`PATCH_VRAM_DEVICE_V08`（最小 framebuffer）実装完了（2026-06-21）**。`mem.vram`（kind=vram・role=memory・writable・reset 0
   クリア）を追加し、CPU から既存 `LD`/`ST` でアクセス（CPU 命令追加なし）。初期は **indexed color 32×32 / 1 byte/pixel / 1024 B**。
-  ROM と同型の memory device で circuit_compat は Editor override 配置（game16 は 0xC000 案）。**表示 UI は後続**（`PATCH_GAME_RUNTIME_MINIMAL_V08`
+  ROM と同型の runtime-backed memory device（`VramPart`/`sim_vram`）で circuit_compat は Editor override 配置（game16 は 0xC000 自動）。
+  `core/dev.py`（`VramPart`・32bit LE word・dump/pixel/set_pixel）/ `core/devices.py`（`_RUNTIME_BACKED`/`_RUNTIME_ID`/`_base_size`/`MemoryLayout.vram_*`）/
+  `core/circuit.py`（`plan["vrams"]`）/ `ui/win.py`・`ui/run_status.py`（`VRAM:` 行）。**表示 UI は後続**（`PATCH_GAME_RUNTIME_MINIMAL_V08`
   / `PATCH_VRAM_VIEWER_V08`）。**Game Runtime Minimal の前段**（VRAM→Game Runtime→Stabilize）。VRAM 非配置は現行互換。
-  設計資料: `PATCH_VRAM_DEVICE_V08_ROADMAP.md` / `..._CHECKLIST.md`（実装は未着手）。
+  `python -m pytest tests/` → 1164 passed（+28）。設計資料: `PATCH_VRAM_DEVICE_V08_ROADMAP.md` / `..._CHECKLIST.md`。
 
 ### E. Address Map Editor
 - ユーザーによる base/size の任意編集 UI（v0.7 は固定既定）。

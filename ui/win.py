@@ -24,7 +24,7 @@ from core.devices import (
     get_memory_layout, apply_address_overrides,
 )
 from core.cpu import AK32Part
-from core.dev import RamPart, RomPart, UartPart, InputPart, TimerPart
+from core.dev import RamPart, RomPart, UartPart, InputPart, TimerPart, VramPart
 from core.project import create_project, load_project, load_target, save_system
 from core.runtime import VirtualCircuitRuntime
 from core.sim import Bus
@@ -224,6 +224,11 @@ class MainWin(QMainWindow):
         # an Address Map Editor override gives it a base/size; game16 auto-places it.
         for node_id in plan.get("roms", []):
             specs.append(make_device_spec(node_id, self._part_of(node_id), layout=layout))
+        # PATCH_VRAM_DEVICE_V08: VRAM (writable memory) nodes. Memory-role like ROM;
+        # circuit_compat has no auto base (layout.vram_base None) -> placed only via an
+        # Address Map Editor override; game16 auto-places it at 0xC000.
+        for node_id in plan.get("vrams", []):
+            specs.append(make_device_spec(node_id, self._part_of(node_id), layout=layout))
         # PATCH_TIMER_DEVICE_V08: Timer (MMIO) nodes. Listed after UART/Input so the
         # running MMIO index lands them at 0x0120 (UART 0x0100 / Input 0x0110 / Timer
         # 0x0120). ROM is memory-role and does not consume an MMIO slot.
@@ -257,9 +262,10 @@ class MainWin(QMainWindow):
         comes from the layout (PATCH_CODE_REGION_MMIO_RELOCATION_V08; default 0x0000).
         """
         self._sim_ram = self._sim_uart = self._sim_cpu = None
-        self._sim_input = self._sim_rom = self._sim_timer = None
+        self._sim_input = self._sim_rom = self._sim_timer = self._sim_vram = None
         self._sim_ram_node = self._sim_uart_node = self._sim_cpu_node = None
         self._sim_input_node = self._sim_rom_node = self._sim_timer_node = None
+        self._sim_vram_node = None
         # PATCH_PROGRAM_TARGET_ROM_V08: when the program target is ROM and a ROM
         # runtime base is resolved, the CPU resets to the ROM base so it fetches the
         # program from ROM. The ROM spec can appear after the CPU spec, so resolve the
@@ -290,6 +296,13 @@ class MainWin(QMainWindow):
                 self._sim_rom = RomPart("sim_rom", "ROM",
                                         size=spec["size"], base=spec["base"])
                 self._sim_rom_node = spec["node_id"]
+            elif kind == "vram" and self._sim_vram is None and spec.get("base") is not None:
+                # Writable framebuffer; built only when it has a base (game16 auto /
+                # Editor override). circuit_compat with no override -> unplaced
+                # (PATCH_VRAM_DEVICE_V08). Accessed by the CPU via plain LD/ST.
+                self._sim_vram = VramPart("sim_vram", "VRAM",
+                                          size=spec["size"], base=spec["base"])
+                self._sim_vram_node = spec["node_id"]
             elif kind == "uart" and self._sim_uart is None:
                 self._sim_uart = UartPart("sim_uart", "UART", base=spec["base"])
                 self._sim_uart_node = spec["node_id"]
@@ -310,7 +323,7 @@ class MainWin(QMainWindow):
         # Address Map from the addressable specs: the first RAM (memory container) +
         # all MMIO windows (UART/Input). 2nd+ RAM is NOT placed (16-bit space; warned
         # via multi_device_warnings). The map carves the RAM around every MMIO window.
-        addr_specs, seen_ram, seen_rom = [], False, False
+        addr_specs, seen_ram, seen_rom, seen_vram = [], False, False, False
         for s in specs:
             if not s.get("addressable"):
                 continue
@@ -324,6 +337,10 @@ class MainWin(QMainWindow):
                 if seen_rom:
                     continue
                 seen_rom = True
+            if s["kind"] == "vram":
+                if seen_vram:
+                    continue
+                seen_vram = True
             addr_specs.append(s)
         amap = build_address_map_from_devices(mode, addr_specs, layout=layout)
 
@@ -338,6 +355,8 @@ class MainWin(QMainWindow):
             parts_by_id["sim_rom"] = self._sim_rom
         if self._sim_timer is not None:
             parts_by_id["sim_timer"] = self._sim_timer
+        if self._sim_vram is not None:
+            parts_by_id["sim_vram"] = self._sim_vram
         for dev in amap["devices"]:
             part = parts_by_id.get(dev.get("device_id"))
             if part is None:
@@ -949,10 +968,16 @@ class MainWin(QMainWindow):
                 "base":  self._sim_timer.base,
             }
 
+        # PATCH_VRAM_DEVICE_V08: VRAM base/size when a VRAM device is placed.
+        vram = None
+        if self._sim_vram is not None:
+            vram = {"base": self._sim_vram.base, "size": self._sim_vram.size}
+
         return {
             "mode":        mode,
             "program_target": self._program_target_status(),
             "timer":       timer,
+            "vram":        vram,
             "target_cpu":  plan.get("target_cpu"),
             "ram_desc":    ram_desc,
             "uart_desc":   uart_desc,

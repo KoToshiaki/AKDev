@@ -100,6 +100,11 @@
   - 次候補: `PATCH_VRAM_DEVICE_V08` / `PATCH_GAME_RUNTIME_MINIMAL_V08` / `PATCH_V08_STABILIZE_AND_DOCS`
 * [x] 次候補 `PATCH_VRAM_DEVICE_V08` の設計資料を作成した（2026-06-20）
   - `PATCH_VRAM_DEVICE_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・VRAM は CPU から `LD`/`ST` 可能な memory device（kind=vram・role=memory・writable・reset 0 クリア・CPU 命令追加なし）・初期は indexed color 32×32 / 1 byte/pixel / 1024 B・ROM と同型で circuit_compat は Editor override 配置（game16 は 0xC000 案）・registry は `_RUNTIME_BACKED`/`_RUNTIME_ID`/`_base_size` のみ追加（kind/role/label は既存）・表示 UI は後続（`PATCH_GAME_RUNTIME_MINIMAL_V08` / `PATCH_VRAM_VIEWER_V08`）・VRAM 非配置は現行互換・Game Runtime Minimal の前段**
+* [x] `PATCH_VRAM_DEVICE_V08` 実装完了（2026-06-21・**VRAM は runtime-backed writable framebuffer・CPU 命令追加なし・VRAM 非配置は現行互換**）
+  - `parts/mem/vram/part.json`（v2・bus/clk/reset・既存流用）/ `core/devices.py`（`_RUNTIME_BACKED`/`_RUNTIME_ID["vram"]="sim_vram"` / `_base_size` vram 分岐 / `MemoryLayout.vram_base`/`vram_size`・GAME16=0xC000/0x0400）/ `core/dev.py`（`VramPart`・32bit LE word read/write・reset 0 クリア・dump/pixel/set_pixel・範囲外 BusError）/ `core/circuit.py`（`_is_vram`・`plan["vrams"]`・早期 return に vrams:[]）/ `ui/win.py`（`self._sim_vram`/`_sim_vram_node`・`_auto_device_specs`/`_build_runtime_devices`・`seen_vram` dedup・base 無しは未配置）/ `ui/run_status.py`（`VRAM:` 行）
+  - circuit_compat は Editor override で配置（game16 は 0xC000 自動）。CPU は既存 `LD`/`ST` で読み書き。ROM target + VRAM 構成も実行可。表示 panel は今回なし。`tests/test_vram_device_v08.py`（28 件）・旧 `test_device_registry_refactor_v08.py` の vram=runtime-backed 化に伴う 2 件を更新・`tests/test/system.json` 差分なし
+  - `python -m pytest tests/` → **1164 passed**（1136 + 新規 28）
+  - 次候補: `PATCH_GAME_RUNTIME_MINIMAL_V08` / `PATCH_VRAM_VIEWER_V08` / `PATCH_V08_STABILIZE_AND_DOCS`
 * [x] 次候補 `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08` の設計資料を作成した（2026-06-18）
   - `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・ROM/Input 優先（Input は LD で読め IN 命令不要）・VRAM/Storage は後続・新 device 無しは現行互換・分割案（INPUT 先行 → ROM）あり**
 * [ ] v0.8 テーマを確定する（候補: Device Expansion & Connection Validation）

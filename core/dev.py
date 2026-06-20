@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Toshiaki Kou
 # SPDX-License-Identifier: BSD-3-Clause
-"""Concrete simulation devices — RamPart, RomPart, UartPart, InputPart."""
+"""Concrete simulation devices — RamPart, RomPart, UartPart, InputPart, TimerPart, VramPart."""
 from __future__ import annotations
 
 from core.sim import BusError, Part
@@ -317,3 +317,72 @@ class TimerPart(Part):
     def delta_value(self) -> int:
         """Return ticks since the last DELTA clear (for Run Status / tests)."""
         return (self._tick - self._delta_base) & 0xFFFFFFFF
+
+
+# ---------------------------------------------------------------------------
+# VramPart — writable framebuffer memory (PATCH_VRAM_DEVICE_V08)
+# ---------------------------------------------------------------------------
+
+class VramPart(Part):
+    """Byte-array backed video RAM (framebuffer).
+
+    The CPU bus reads/writes 32-bit little-endian words exactly like :class:`RamPart`
+    (so existing ``LD`` / ``ST`` reach it with no new instruction). For display it is
+    also a 1-byte-per-pixel image (``width`` x ``height`` indexed color); a 32-bit
+    word write stores 4 little-endian pixel bytes. The word view and the pixel view
+    share the same buffer. Cleared to 0 on reset (runtime state, unlike ROM).
+    """
+
+    def __init__(self, part_id: str, name: str, size: int, base: int = 0,
+                 width: int = 32, height: int = 32):
+        super().__init__(part_id, name)
+        if size <= 0:
+            raise ValueError(f"size must be > 0, got {size}")
+        self.size = size
+        self.base = base
+        self.width = width
+        self.height = height
+        self._mem = bytearray(size)
+
+    # ---- helpers ----
+
+    def _offset(self, addr: int) -> int:
+        off = addr - self.base
+        if not (0 <= off <= self.size - 4):
+            raise BusError(
+                f"{self.id}: address {addr:#010x} out of range "
+                f"[{self.base:#010x}, {self.base + self.size - 1:#010x}]"
+            )
+        return off
+
+    # ---- Part interface ----
+
+    def reset(self) -> None:
+        self._mem[:] = bytearray(self.size)
+
+    def read(self, addr: int) -> int:
+        off = self._offset(addr)
+        return int.from_bytes(self._mem[off:off + 4], "little")
+
+    def write(self, addr: int, value: int) -> None:
+        off = self._offset(addr)
+        self._mem[off:off + 4] = (value & 0xFFFFFFFF).to_bytes(4, "little")
+
+    # ---- bulk / display helpers ----
+
+    def dump(self) -> bytes:
+        """Return the full framebuffer contents as bytes."""
+        return bytes(self._mem)
+
+    def pixel(self, x: int, y: int) -> int:
+        """Return the 1-byte pixel at (x, y) (row-major). Out of range -> 0."""
+        idx = y * self.width + x
+        if not (0 <= idx < self.size):
+            return 0
+        return self._mem[idx]
+
+    def set_pixel(self, x: int, y: int, value: int) -> None:
+        """Set the 1-byte pixel at (x, y) (row-major). Out of range -> no-op."""
+        idx = y * self.width + x
+        if 0 <= idx < self.size:
+            self._mem[idx] = value & 0xFF

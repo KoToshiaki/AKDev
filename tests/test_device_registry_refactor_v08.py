@@ -95,13 +95,15 @@ def test_cpu_spec_not_addressable():
     assert s["runtime_id"] == "sim_cpu"
 
 
-def test_vram_spec_addressable_not_runtime_backed():
+def test_vram_spec_addressable_and_runtime_backed():
+    # PATCH_VRAM_DEVICE_V08: VRAM is now a runtime-backed writable framebuffer
+    # (VramPart / sim_vram), no longer a placeholder kind.
     s = make_device_spec("n4", _VRAM, mode="circuit")
     assert s["kind"] == "vram"
     assert s["role"] == "memory"
     assert s["addressable"] is True
-    assert s["runtime_backed"] is False        # not a RAM runtime
-    assert s["runtime_id"] is None
+    assert s["runtime_backed"] is True
+    assert s["runtime_id"] == "sim_vram"
 
 
 def test_unsupported_spec_no_crash():
@@ -122,7 +124,7 @@ def test_helpers():
     assert device_role("cpu") == "cpu"
     assert is_addressable_kind("ram") and is_addressable_kind("uart")
     assert not is_addressable_kind("cpu")
-    assert is_runtime_backed_kind("ram") and not is_runtime_backed_kind("vram")
+    assert is_runtime_backed_kind("ram") and is_runtime_backed_kind("vram")
 
 
 def test_build_device_specs_and_legacy():
