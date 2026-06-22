@@ -108,6 +108,11 @@ v0.8 は、この実行基盤の上で **接続の妥当性検証** と **デバ
   Run Status に `Game:` 行（`ui/run_status.py`）。MMIO 実番地はテストで実取得（game16 は 0xE000/0xE010/0xE020 を unit 検証）。
   VRAM 非配置は現行互換（viewer 無害）。`tests/test_game_runtime_minimal_v08.py`（18 件）・`python -m pytest tests/` → **1182 passed**（+18）・
   `tests/test/system.json` 差分なし。次は `PATCH_V08_STABILIZE_AND_DOCS`。設計資料: `PATCH_GAME_RUNTIME_MINIMAL_V08_ROADMAP.md` / `..._CHECKLIST.md`。
+- **`PATCH_V08_STABILIZE_AND_DOCS` 実施（2026-06-23・v0.8 最終整理）**。v0.8（**Device Expansion & Connection Validation**）を
+  完了状態に整理。安定化・ドキュメント整理（`ROADMAP8.md`/`CHECKLIST8.md`/`HANDOFF.md`/`README.md`）・最終検証のみで、**コード変更なし**。
+  最終テスト `python -m pytest tests/` → **1182 passed**・`tests/test/system.json` 差分なし。**v0.8 はこのパッチで完了**（`PHASE COMPLETE`
+  宣言と `old/` 収納・`ROADMAP9.md`/`CHECKLIST9.md` 作成はユーザー宣言後）。v0.9 候補は §「v0.9 以降へ送る候補」。設計資料:
+  `PATCH_V08_STABILIZE_AND_DOCS_ROADMAP.md` / `..._CHECKLIST.md`。
 
 ### E. Address Map Editor
 - ユーザーによる base/size の任意編集 UI（v0.7 は固定既定）。
@@ -135,6 +140,29 @@ v0.8 は、この実行基盤の上で **接続の妥当性検証** と **デバ
 
 ### I. HDL / FPGA export 準備
 - 回路 → HDL 出力、合成（iverilog / Yosys）、FPGA 実機書き込みの準備。
+
+---
+
+## v0.8 完了（2026-06-23）
+
+> v0.8 = **Device Expansion & Connection Validation** は `PATCH_PORT_SCHEMA_V08` 〜 `PATCH_GAME_RUNTIME_MINIMAL_V08`
+> の 14 パッチで完了し、`PATCH_V08_STABILIZE_AND_DOCS` で最終整理した。`python -m pytest tests/` → **1182 passed**・
+> `tests/test/system.json` 差分なし。到達点と完了パッチ一覧は `PATCH_V08_STABILIZE_AND_DOCS_ROADMAP.md` を参照。
+> `PHASE COMPLETE` 宣言・`old/` 収納・次フェーズ資料作成はユーザー宣言後に行う。
+
+## v0.9 以降へ送る候補
+
+- `PATCH_AK32_BRANCH_EXPANSION_V08`（`BNE` / `BEQZ` / `BNEZ`）
+- `PATCH_AK32_SHIFT_IMM_BITWISE_V08`（`SHL` / `SHR` / `ANDI` / `ORI`）
+- `PATCH_AK32_STACK_CALL_RET_V08`（stack / `CALL` / `RET`）
+- VRAM Viewer 拡張（palette / 色 / 拡大率 UI）
+- Game Runtime 拡張（フレーム同期 / 入力エッジ / ゲームループ / 複数 VRAM）
+- sprite / tile / palette 本格実装
+- HDL / FPGA export 準備（候補 I）
+- project template / sample project
+- save / load 強化（loaded_program 永続化拡張）
+- 繰越: `tests/test/system.json` 差分の扱い（破棄 / コミット / .gitignore 化）をユーザー決定
+- 複数 RAM の真の共存（16bit アドレス制約・候補 F）
 
 ---
 

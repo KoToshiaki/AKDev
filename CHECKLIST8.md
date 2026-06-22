@@ -112,41 +112,46 @@
   - ROM + Input + Timer + VRAM を同時配置し ROM target から実行 → Input/Timer を `LD` で読み VRAM へ `ST`。MMIO 実番地はテストで実取得（`self._sim_input.base`/`self._sim_timer.base`）・game16 は 0xE000/0xE010/0xE020 を unit 検証。MainWin は circuit_compat 自動選択のため統合テストは circuit_compat + Address Map override 配置。`tests/test_game_runtime_minimal_v08.py`（18 件）・`tests/test/system.json` 差分なし。GUI 目視はヘッドレスのため未実施（表示は `snapshot()`/`pixel()` で検証）
   - `python -m pytest tests/` → **1182 passed**（1164 + 新規 18）
   - 次候補: `PATCH_V08_STABILIZE_AND_DOCS`（v0.8 安定化・ドキュメント・PHASE COMPLETE 準備）
+* [x] `PATCH_V08_STABILIZE_AND_DOCS` 実施（2026-06-23・**v0.8 最終整理・コード変更なし**）
+  - `PATCH_V08_STABILIZE_AND_DOCS_ROADMAP.md` / `..._CHECKLIST.md` 作成。`ROADMAP8.md` / `CHECKLIST8.md` / `HANDOFF.md` / `README.md` を v0.8 完了状態へ最小更新（既存履歴は保持・見出し重複なし）
+  - v0.8（**Device Expansion & Connection Validation**）は `PATCH_PORT_SCHEMA_V08` 〜 `PATCH_GAME_RUNTIME_MINIMAL_V08` の 14 パッチで完了。安定化は document + 検証のみ（新機能/CPU命令/ASM/リファクタなし）
+  - 最終検証: `python -m pytest tests/` → **1182 passed**・`tests/test/system.json` 差分なし・`# AKDev ROADMAP 8` 見出し 1 個。GUI 目視はヘッドレスのため未実施（ロジックは pytest 済み）
+  - **v0.8 はこのパッチで完了**。`PHASE COMPLETE` 宣言・`old/` 収納・`ROADMAP9.md`/`CHECKLIST9.md` 作成はユーザー宣言後。v0.9 候補は `ROADMAP8.md` の「v0.9 以降へ送る候補」参照
 * [x] 次候補 `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08` の設計資料を作成した（2026-06-18）
   - `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・ROM/Input 優先（Input は LD で読め IN 命令不要）・VRAM/Storage は後続・新 device 無しは現行互換・分割案（INPUT 先行 → ROM）あり**
-* [ ] v0.8 テーマを確定する（候補: Device Expansion & Connection Validation）
-  - 完了条件: ユーザーがテーマと最初のパッチを決定する
-* [ ] 最初のパッチ（`PATCH_PORT_SCHEMA_V08` 想定）の実装範囲をユーザーが承認する
-  - 完了条件: ユーザーから実装開始の明示的な指示がある
-* [ ] 最初のパッチの `PATCH_*_V08_ROADMAP.md` / `..._CHECKLIST.md` を作業前に作成する
-  - `PATCH_PORT_SCHEMA_V08` は設計資料作成済み（実装着手は承認後）
+* [x] v0.8 テーマを確定した（**Device Expansion & Connection Validation**・2026-06-17 確定・14 パッチで実装完了）
+* [x] 最初のパッチ `PATCH_PORT_SCHEMA_V08` 以降の実装をユーザー承認のもと進めた（v0.8 全パッチ完了）
+* [x] 各パッチの `PATCH_*_V08_ROADMAP.md` / `..._CHECKLIST.md` を着手前に作成した（CLAUDE.md §3 準拠）
 
 ---
 
-# 1. v0.8 作業候補（未確定・着手時に個別 CHECKLIST 化）
+# 1. v0.8 作業候補（実施結果・2026-06-23 時点）
 
-> 以下は候補。優先順位・取捨選択はユーザー判断で確定する。実装項目化は着手時に行う。
+> v0.8 完了時点の取捨選択結果。詳細は上記パッチ履歴と `ROADMAP8.md` を参照。
 
-* [ ] A. Port direction / width validation
-* [ ] B. Bus protocol validation
-* [ ] C. 複数 RAM / UART handling
-* [ ] D. ROM / VRAM / Storage / Input device expansion
-* [ ] E. Address Map Editor
-* [ ] F. コード領域拡張 / UART MMIO 窓の再配置・可変化
-* [ ] G. CPU 命令拡張（CALL / RET / IN）
-* [ ] H. ゲーム runtime 準備
-* [ ] I. HDL / FPGA export 準備
+* [x] A. Port direction / width validation（`PATCH_PORT_DIRECTION_WIDTH_VALIDATION_V08`・warning only）
+* [x] B. Bus protocol validation（`PATCH_BUS_PROTOCOL_VALIDATION_V08`・warning only）
+* [x] C. 複数 RAM / UART handling（`PATCH_MULTI_RAM_UART_ADDRESS_MAP_V08`・複数 RAM 真の共存は v0.9 候補 F）
+* [x] D. ROM / VRAM / Storage / Input device expansion（Input/ROM/Timer/VRAM 実装。Storage は v0.9 へ）
+* [x] E. Address Map Editor（`PATCH_ADDRESS_MAP_EDITOR_V08`）
+* [x] F. コード領域拡張 / MMIO 窓の再配置・可変化（`PATCH_CODE_REGION_MMIO_RELOCATION_V08`・MemoryLayout）
+* [~] G. CPU 命令拡張: Bitwise（`AND/OR/XOR/NOT`）実装。**branch 拡張 / shift / CALL・RET・stack は v0.9 へ**
+* [x] H. ゲーム runtime 準備（`PATCH_GAME_RUNTIME_MINIMAL_V08` + 32×32 VRAM Viewer。本格ゲームループは v0.9 へ）
+* [ ] I. HDL / FPGA export 準備 → **v0.9 へ送る**
 
 ---
 
-# 2. 繰越課題（v0.6 → v0.7 → v0.8）
+# 2. 繰越課題（v0.6 → v0.7 → v0.8 → v0.9）
 
-* [ ] `tests/test/system.json` のテスト実行差分の扱いをユーザーが決定する
+* [ ] `tests/test/system.json` のテスト実行差分の扱いをユーザーが決定する → **v0.9 へ繰越**
   - 完了条件: 破棄 / コミット / .gitignore 化 のいずれかをユーザーが選ぶ（勝手に破棄しない）
 
 ---
 
-# 3. 注意事項
+# 3. v0.8 完了状態（2026-06-23）
 
-* このフェーズは候補整理のみ。新機能実装・挙動変更・テスト追加・commit / push は未実施。
-* 実装は、ユーザーが最初のパッチを指示してから着手する。
+* v0.8（**Device Expansion & Connection Validation**）は 14 パッチで実装完了し、`PATCH_V08_STABILIZE_AND_DOCS` で最終整理した。
+* 最終テスト: `python -m pytest tests/` → **1182 passed**・`tests/test/system.json` 差分なし・見出し重複なし。
+* commit / push は**未実施**（ユーザー操作）。`PHASE COMPLETE` 宣言後に `old/` 収納・`ROADMAP9.md`/`CHECKLIST9.md` 作成を行う（CLAUDE.md §4）。
+* v0.9 へ送る候補は `ROADMAP8.md` の「v0.9 以降へ送る候補」を参照。
+* GUI 目視はヘッドレス環境のため未実施（表示ロジックは pytest で検証済み）。

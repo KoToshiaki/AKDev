@@ -1,6 +1,52 @@
 # AKDev 引き継ぎメモ
 
-更新日: 2026-06-17（✅ v0.7 PHASE COMPLETE / v0.8 開始準備 / 現行ドキュメントを v0.8 に一本化）
+更新日: 2026-06-23（v0.8 実装完了 + `PATCH_V08_STABILIZE_AND_DOCS` で最終整理 / PHASE COMPLETE 宣言待ち）
+
+---
+
+## 🎮 v0.8 完了直前（2026-06-23）— Device Expansion & Connection Validation
+
+### 現在状態
+
+- **ブランチ = `dev`** / 最新コミット `11c312c feat: add minimal game runtime`（STABILIZE のドキュメント更新は未コミット）。
+- **v0.8（Device Expansion & Connection Validation）は 14 パッチで実装完了**し、`PATCH_V08_STABILIZE_AND_DOCS` で最終整理した。
+  **`PHASE COMPLETE` 宣言待ち**（宣言後に `old/` 収納・`ROADMAP9.md`/`CHECKLIST9.md` 作成）。
+- **最終テスト**: `python -m pytest tests/` → **1182 passed**（21 warnings は PySide6 Deprecation のみ）。`tests/test/system.json` 差分なし。
+
+### v0.8 で完了した主要機能
+
+| 分類 | 機能 |
+|---|---|
+| 接続検証（warning only） | ports schema v2 / direction・width 検証 / bus protocol 検証 |
+| デバイス拡張 | Input（MMIO・`LD`）/ ROM（read-only）/ Timer（deterministic tick）/ VRAM（writable framebuffer） |
+| メモリ構成 | `MemoryLayout`（LEGACY/CIRCUIT_COMPAT/GAME16）/ Address Map Editor（per-device override） |
+| 実行 | program target RAM / ROM 切替（ROM target は `reset_pc=rom.base`） |
+| CPU | AK32 Bitwise（`AND`/`OR`/`XOR`/`NOT`・opcode 0x0B–0x0E） |
+| ゲーム実行環境 | ROM+Input+Timer+VRAM 最小ゲーム runtime + **32×32 グレースケール VRAM Viewer** |
+
+使えるデバイス: **CPU / RAM / UART / Input / ROM / Timer / VRAM**。
+実行機能: **RAM target / ROM target / Address Map Editor / Run Status（Timer・VRAM・Game 行）/ VRAM Viewer**。
+
+### 最新パッチ
+
+- `PATCH_GAME_RUNTIME_MINIMAL_V08`（2026-06-23）— ROM+Input+Timer+VRAM 統合 + 32×32 VRAM Viewer。新 runtime class なし・CPU 命令/ASM 変更なし。`tests/test_game_runtime_minimal_v08.py`（18 件）。
+- `PATCH_V08_STABILIZE_AND_DOCS`（2026-06-23）— v0.8 最終整理（ドキュメント + 検証のみ・コード変更なし）。
+
+### 次にやるべきこと
+
+1. **commit / push**（ユーザー操作）— STABILIZE のドキュメント更新（ROADMAP8/CHECKLIST8/HANDOFF/README + STABILIZE 資料）。
+2. **`PHASE COMPLETE` 宣言**（ユーザー）→ `old/` 収納・`ROADMAP9.md`/`CHECKLIST9.md` 作成。
+3. **v0.9 計画**: AK32 branch 拡張 / shift・immediate bitwise / stack・CALL・RET / VRAM Viewer 拡張 / Game Runtime 拡張 / sprite・tile・palette / HDL・FPGA export / project template / save・load 強化。
+
+### 注意点
+
+- **CPU 命令 / ASM は Game Runtime Minimal では変更していない**（既存 `LDI/LD/ST/JMP/BEQ/ADDI/AND/OR/XOR/NOT/HALT` のみで成立）。
+- **VRAM Viewer は最小 32×32**（グレースケール・`dump()`/`pixel()` を読むだけ・VRAM 本体不変）。palette / 色 / 拡大率 UI は未実装。
+- **sprite / tile / palette 本格実装は未実装**（v0.9 候補）。
+- **HDL / FPGA export は未実装**（v0.9 候補）。
+- **複数 RAM の真の共存**は 16bit アドレス制約のため未対応（v0.9 候補 F）。
+- `tests/test/system.json` のテスト実行差分の扱い（破棄 / コミット / .gitignore 化）は v0.6 からの繰越でユーザー判断待ち。
+- GUI 目視確認はヘッドレス環境のため未実施（VRAM Viewer 表示・Run Status 行は pytest でロジック検証済み）。
 
 ---
 
