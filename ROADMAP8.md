@@ -97,6 +97,10 @@ v0.8 は、この実行基盤の上で **接続の妥当性検証** と **デバ
   `core/circuit.py`（`plan["vrams"]`）/ `ui/win.py`・`ui/run_status.py`（`VRAM:` 行）。**表示 UI は後続**（`PATCH_GAME_RUNTIME_MINIMAL_V08`
   / `PATCH_VRAM_VIEWER_V08`）。**Game Runtime Minimal の前段**（VRAM→Game Runtime→Stabilize）。VRAM 非配置は現行互換。
   `python -m pytest tests/` → 1164 passed（+28）。設計資料: `PATCH_VRAM_DEVICE_V08_ROADMAP.md` / `..._CHECKLIST.md`。
+- **次候補 `PATCH_GAME_RUNTIME_MINIMAL_V08` の設計資料を作成（2026-06-21・実装未着手）**。ROM/Input/Timer/VRAM を統合した
+  v0.8 完了前の最小ゲーム runtime（新 runtime class を足さず既存 Run/Step に「demo 構成 + sample program + VRAM 表示 + refresh」の薄い層）。
+  VRAM Viewer（32×32 framebuffer）を**含める案 B が第一候補**・UI 肥大化時は `PATCH_VRAM_VIEWER_V08` へ分離。既存命令のみ（CPU/ASM 変更なし）。
+  v0.8 を閉じる方針なら命令拡張（Branch/Shift/Stack）は後回し。設計資料: `PATCH_GAME_RUNTIME_MINIMAL_V08_ROADMAP.md` / `..._CHECKLIST.md`。
 
 ### E. Address Map Editor
 - ユーザーによる base/size の任意編集 UI（v0.7 は固定既定）。
