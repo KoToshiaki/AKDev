@@ -1,5 +1,7 @@
 # AKDev
 
+**Language / 言語: English | [日本語](README.ja.md)**
+
 AKDev is an integrated development and simulation environment for a custom FPGA game
 console built around the **AK32 CPU architecture**. You place CPU / memory / I/O parts on
 a visual System Canvas, wire them into a circuit, write **AK32 assembly**, and Build / Run /
