@@ -91,6 +91,9 @@ def render_status(status: dict) -> str:
         )
     else:
         lines.append("VRAM: None")
+    # PATCH_GAME_RUNTIME_MINIMAL_V08: minimal game-runtime indicator (ROM/Input/Timer/VRAM).
+    game = status.get("game")
+    lines.append(f"Game: {game}" if game else "Game: None")
 
     # ---- Target / Circuit ----
     lines.append(f"Target CPU: {status.get('target_cpu') or 'None'}")

@@ -33,37 +33,40 @@
 
 ---
 
-## 2. 実装予定（**今回は未実装**）
+## 2. 実装済み（2026-06-23）
 
-- [ ] viewer または dump 表示（`ui/vram_viewer.py` 新規 / 案 A 縮退時は dump テストのみ）
-- [ ] MainWin 連携（viewer dock 生成・`self._sim_vram` を viewer に渡す）
-- [ ] Step/Run/Reset 後 refresh（`_refresh_run_panels()` に viewer render を 1 行追加）
-- [ ] demo / sample program（ROADMAP §5 の Demo 1〜4・実番地を Address Map で確認後に焼く）
-- [ ] tests 追加（`tests/test_game_runtime_minimal_v08.py`）
-- [ ] docs 更新（本 CHECKLIST・`ROADMAP8.md`/`CHECKLIST8.md` 最小追記・`HANDOFF.md`）
-
----
-
-## 3. テスト予定（**今回は未追加**）
-
-- [ ] ROM + Input + Timer + VRAM を同時配置できる（game16・4 device）
-- [ ] game16 layout で overlap しない（`validate_address_map(amap) == []`）
-- [ ] ROM target から実行して VRAM に書ける
-- [ ] Timer 値を VRAM に書ける（Demo 3）
-- [ ] Input 値を VRAM に書ける（`set_keys` + Demo 2）
-- [ ] Run 後に VRAM 内容が変わる（Demo 4 雛形）
-- [ ] Viewer を入れるなら viewer refresh 確認（render 後に viewer が VRAM と一致）
-- [ ] VRAM 未配置時は既存互換（viewer 空・Hello World 従来通り）
-- [ ] 既存 tests（Hello World / Input / Timer / VRAM / ROM / Program Target / Bitwise）が壊れない
+- [x] viewer 表示（`ui/vram_viewer.py` 新規・`VramViewer(QDockWidget)`・32×32 グレースケール・`snapshot()`/`pixel()`/`is_active()`）
+- [x] MainWin 連携（`_setup_vram_viewer` で dock 生成・Memory Viewer とタブ化・`self._sim_vram` を viewer に渡す）
+- [x] Step/Run/Reset/Write 後 refresh（`_refresh_run_panels()` + `_do_reset` + `write_program` に `_update_vram_viewer()` を追加）
+- [x] demo / sample program（テスト内に Demo 1〜4 を ASM 文字列で保持・Input/Timer の実番地は `self._sim_input.base`/`self._sim_timer.base` から取得して焼く）
+- [x] Run Status 最小追記（`Game: ROM+Input+Timer+VRAM` 行・`_collect_run_status` の `game` キー + `render_status`）
+- [x] tests 追加（`tests/test_game_runtime_minimal_v08.py`・18 件）
+- [x] docs 更新（本 CHECKLIST・`ROADMAP8.md`/`CHECKLIST8.md` 最小追記・`HANDOFF.md`）
 
 ---
 
-## 4. 検証予定（**今回は未実施**）
+## 3. テスト結果（2026-06-23・全 18 件 green）
 
-- [ ] `python -m pytest tests/` 全通過
-- [ ] sample program 動作（Run 後に VRAM が想定値）
-- [ ] `tests/test/system.json` 差分なし
-- [ ] GUI 目視（viewer の見た目）— ヘッドレス環境では**未実施として記録**する
+- [x] ROM + Input + Timer + VRAM を同時配置できる（`test_rom_input_timer_vram_coexist`）
+- [x] game16 layout で overlap しない（`test_game16_*_non_overlapping`・`validate_address_map == []`）
+- [x] game16 MMIO base = UART 0xE000 / Input 0xE010 / Timer 0xE020（`test_game16_mmio_bases_uart_input_timer`）
+- [x] ROM target から実行して VRAM に書ける（`test_rom_target_writes_vram`）
+- [x] Timer 値を VRAM に書ける（`test_timer_value_written_to_vram`）
+- [x] Input 値を VRAM に書ける（`set_input_keys` + `test_input_value_written_to_vram`）
+- [x] Run 後に VRAM 内容が変わる（`test_run_changes_vram_loop`・JMP 無限ループ → 1000 cycle cap）
+- [x] viewer refresh で VRAM 内容が反映される（`test_viewer_refreshes_after_run`・`snapshot()==dump()`）
+- [x] viewer は VRAM 本体を変更しない（`test_vram_viewer_does_not_mutate_vram`）
+- [x] VRAM 未配置時は既存互換（`test_plain_circuit_unaffected`・`test_legacy_window_viewer_inactive`）
+- [x] 既存 tests（Hello World / Input / Timer / VRAM / ROM / Program Target / Bitwise）が壊れない
+
+---
+
+## 4. 検証結果（2026-06-23）
+
+- [x] `python -m pytest tests/` 全通過（**1182 passed**・1164 + 新規 18）
+- [x] sample program 動作（Run 後に VRAM が想定値: 固定 0xAA / Input 0x05 / Timer 非ゼロ / loop 変化）
+- [x] `tests/test/system.json` 差分なし
+- [ ] GUI 目視（viewer の見た目）— **ヘッドレス環境のため未実施**。表示ロジックは `snapshot()`/`pixel()` で検証済み
 
 ---
 
@@ -78,6 +81,9 @@
 
 ## メモ
 
-- 本パッチは**既存命令だけで成立**する（`BNE`/shift/`CALL`/`RET` は不要・後続パッチ）。
-- viewer は **VramPart.dump()/pixel() を読むだけ**で VRAM 本体に触れない。
-- **commit / push は行わない**（設計資料のみ）。
+- 本パッチは**既存命令だけで成立**した（`BNE`/shift/`CALL`/`RET` は未使用・後続パッチ）。CPU 命令追加・ASM 変更なし。
+- viewer は **VramPart.dump()/pixel() を読むだけ**で VRAM 本体に触れない（`test_vram_viewer_does_not_mutate_vram` で保証）。
+- **viewer は本パッチに含めた（案 B）**。実装は `QDockWidget + QLabel + QImage` の薄い層で肥大化しなかったため分離不要と判断。
+- 新 `GameRuntime` class は追加せず、既存 `VirtualCircuitRuntime` / `_do_run` / `_do_step` をそのまま使用。
+- MainWin は circuit_compat を自動選択するため、統合テストは **circuit_compat + Address Map override** で配置（game16 は unit レベルで検証）。
+- **commit / push は行っていない**（報告のみ）。

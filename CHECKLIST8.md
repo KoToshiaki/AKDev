@@ -107,6 +107,11 @@
   - 次候補: `PATCH_GAME_RUNTIME_MINIMAL_V08` / `PATCH_VRAM_VIEWER_V08` / `PATCH_V08_STABILIZE_AND_DOCS`
 * [x] 次候補 `PATCH_GAME_RUNTIME_MINIMAL_V08` の設計資料を作成した（2026-06-21）
   - `PATCH_GAME_RUNTIME_MINIMAL_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・ROM/Input/Timer/VRAM を組み合わせた v0.8 完了前の最小ゲーム runtime・新 runtime class を足さず既存 Run/Step に「demo 構成 + sample program（既存命令のみ）+ VRAM 表示 + `_refresh_run_panels` refresh」の薄い層・VRAM Viewer（32×32 framebuffer・グレースケール）を含める案 B が第一候補（UI 肥大化時は `PATCH_VRAM_VIEWER_V08` へ分離）・game16 layout（ROM 0x0000/RAM 0x8000/VRAM 0xC000/MMIO 0xE000）・CPU 命令/ASM 変更なし・VRAM 非配置は現行互換・v0.8 を閉じる方針なら命令拡張は後回し**
+* [x] `PATCH_GAME_RUNTIME_MINIMAL_V08` 実装完了（2026-06-23・**VRAM Viewer を含めた案 B・CPU 命令/ASM 変更なし・新 runtime class なし・VRAM 非配置は現行互換**）
+  - `ui/vram_viewer.py`（新規・`VramViewer(QDockWidget)`・32×32 グレースケール framebuffer・`update_from_vram`/`snapshot`/`pixel`/`is_active`・`dump()`/`pixel()` を読むだけで VRAM 不変）/ `ui/win.py`（`_setup_vram_viewer` で dock 生成・Memory Viewer とタブ化・`_update_vram_viewer` を `_refresh_run_panels`/`_do_reset`/`write_program`/初期化に追加・`_collect_run_status` に `game` キー）/ `ui/run_status.py`（`Game:` 行）
+  - ROM + Input + Timer + VRAM を同時配置し ROM target から実行 → Input/Timer を `LD` で読み VRAM へ `ST`。MMIO 実番地はテストで実取得（`self._sim_input.base`/`self._sim_timer.base`）・game16 は 0xE000/0xE010/0xE020 を unit 検証。MainWin は circuit_compat 自動選択のため統合テストは circuit_compat + Address Map override 配置。`tests/test_game_runtime_minimal_v08.py`（18 件）・`tests/test/system.json` 差分なし。GUI 目視はヘッドレスのため未実施（表示は `snapshot()`/`pixel()` で検証）
+  - `python -m pytest tests/` → **1182 passed**（1164 + 新規 18）
+  - 次候補: `PATCH_V08_STABILIZE_AND_DOCS`（v0.8 安定化・ドキュメント・PHASE COMPLETE 準備）
 * [x] 次候補 `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08` の設計資料を作成した（2026-06-18）
   - `PATCH_DEVICE_EXPANSION_ROM_INPUT_V08_ROADMAP.md` / `..._CHECKLIST.md`。**実装は未着手・ROM/Input 優先（Input は LD で読め IN 命令不要）・VRAM/Storage は後続・新 device 無しは現行互換・分割案（INPUT 先行 → ROM）あり**
 * [ ] v0.8 テーマを確定する（候補: Device Expansion & Connection Validation）

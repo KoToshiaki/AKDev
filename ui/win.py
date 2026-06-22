@@ -32,6 +32,7 @@ from ui.canvas import Canvas
 from ui.editor import EditorTabs, validate_source_name
 from ui.lib import load_parts, cat_label
 from ui.memview import MemoryViewer
+from ui.vram_viewer import VramViewer
 from ui.prop import PropPanel
 from ui.ribbon import RibbonBar
 from ui.run_status import RunStatusPanel
@@ -89,6 +90,7 @@ class MainWin(QMainWindow):
         self._setup_uart_console()   # UART Console panel (tabified with Log)
         self._setup_bus_trace()      # Bus Trace panel (tabified with Log)
         self._setup_memory_viewer()  # Memory Viewer panel (tabified with Log)
+        self._setup_vram_viewer()    # VRAM Viewer panel (tabified with Memory Viewer)
         self._setup_sim()            # creates self._sim_bus/ram/uart/cpu
         self._setup_canvas()         # creates self._canvas and self._editor_tabs
         self._setup_parts_lib()
@@ -108,6 +110,7 @@ class MainWin(QMainWindow):
         self._setup_toolbar()        # reuses those actions
         self._update_register_view() # populate with initial CPU state
         self._update_run_status()    # populate Run Status Panel with initial state
+        self._update_vram_viewer()   # populate VRAM Viewer (VRAM: None at startup)
         self._update_port_detail()   # populate Port Detail Panel with initial state
         self._arrange_initial_layout()  # lead with Log / Properties (Canvas主役)
 
@@ -516,6 +519,12 @@ class MainWin(QMainWindow):
         self._mem_viewer = MemoryViewer(self)
         self.addDockWidget(Qt.BottomDockWidgetArea, self._mem_viewer)
         self.tabifyDockWidget(self._log_dock, self._mem_viewer)
+
+    def _setup_vram_viewer(self):
+        """VRAM Viewer — grayscale framebuffer display (PATCH_GAME_RUNTIME_MINIMAL_V08)."""
+        self._vram_viewer = VramViewer(self)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self._vram_viewer)
+        self.tabifyDockWidget(self._mem_viewer, self._vram_viewer)
 
     def _setup_canvas(self):
         self._canvas = Canvas(log_fn=self._log.append)
@@ -973,11 +982,24 @@ class MainWin(QMainWindow):
         if self._sim_vram is not None:
             vram = {"base": self._sim_vram.base, "size": self._sim_vram.size}
 
+        # PATCH_GAME_RUNTIME_MINIMAL_V08: which game devices are runtime-backed.
+        components = []
+        if self._sim_rom is not None:
+            components.append("ROM")
+        if self._sim_input is not None:
+            components.append("Input")
+        if self._sim_timer is not None:
+            components.append("Timer")
+        if self._sim_vram is not None:
+            components.append("VRAM")
+        game = "+".join(components) if components else None
+
         return {
             "mode":        mode,
             "program_target": self._program_target_status(),
             "timer":       timer,
             "vram":        vram,
+            "game":        game,
             "target_cpu":  plan.get("target_cpu"),
             "ram_desc":    ram_desc,
             "uart_desc":   uart_desc,
@@ -1294,6 +1316,7 @@ class MainWin(QMainWindow):
         self._update_register_view()
         self._update_bus_trace()
         self._update_memory_viewer()
+        self._update_vram_viewer()
         self._editor_tabs.clear_highlight()
         self._canvas.clear_signal_overlay()
         self._update_run_status()
@@ -1400,6 +1423,13 @@ class MainWin(QMainWindow):
         except Exception:
             pass
 
+    def _update_vram_viewer(self) -> None:
+        """Refresh the VRAM Viewer from the simulator VRAM (no-op when unplaced)."""
+        try:
+            self._vram_viewer.update_from_vram(self._sim_vram)
+        except Exception:
+            pass
+
     def _update_signal_overlay(self) -> None:
         """Refresh canvas signal overlay from the most recent bus transactions."""
         self._canvas.update_signal_overlay(self._sim_bus.last_transactions)
@@ -1418,6 +1448,7 @@ class MainWin(QMainWindow):
         self._update_register_view()
         self._update_bus_trace()
         self._update_memory_viewer()
+        self._update_vram_viewer()
         self._update_pc_highlight()
         self._update_signal_overlay()
         self._update_run_status()
@@ -1459,6 +1490,7 @@ class MainWin(QMainWindow):
         self._update_register_view()
         self._update_bus_trace()
         self._update_memory_viewer()
+        self._update_vram_viewer()
         self._editor_tabs.clear_highlight()
         self._canvas.clear_signal_overlay()
         self._update_run_status()

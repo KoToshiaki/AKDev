@@ -101,6 +101,13 @@ v0.8 は、この実行基盤の上で **接続の妥当性検証** と **デバ
   v0.8 完了前の最小ゲーム runtime（新 runtime class を足さず既存 Run/Step に「demo 構成 + sample program + VRAM 表示 + refresh」の薄い層）。
   VRAM Viewer（32×32 framebuffer）を**含める案 B が第一候補**・UI 肥大化時は `PATCH_VRAM_VIEWER_V08` へ分離。既存命令のみ（CPU/ASM 変更なし）。
   v0.8 を閉じる方針なら命令拡張（Branch/Shift/Stack）は後回し。設計資料: `PATCH_GAME_RUNTIME_MINIMAL_V08_ROADMAP.md` / `..._CHECKLIST.md`。
+- **`PATCH_GAME_RUNTIME_MINIMAL_V08` 実装完了（2026-06-23）**。ROM + Input + Timer + VRAM を同時配置し、ROM target から実行して
+  Input/Timer を `LD` で読み VRAM へ `ST` で描画する最小ゲーム runtime。**VRAM Viewer は含めた（案 B）**: `ui/vram_viewer.py`
+  （`VramViewer`・32×32 グレースケール framebuffer・`dump()`/`pixel()` を読むだけ）を追加し、`_refresh_run_panels()`/`_do_reset`/`write_program`
+  で Step/Run/Reset/Write 後に更新。新 runtime class なし・既存 `VirtualCircuitRuntime`/Run/Step 不変・**CPU 命令/ASM 変更なし**。
+  Run Status に `Game:` 行（`ui/run_status.py`）。MMIO 実番地はテストで実取得（game16 は 0xE000/0xE010/0xE020 を unit 検証）。
+  VRAM 非配置は現行互換（viewer 無害）。`tests/test_game_runtime_minimal_v08.py`（18 件）・`python -m pytest tests/` → **1182 passed**（+18）・
+  `tests/test/system.json` 差分なし。次は `PATCH_V08_STABILIZE_AND_DOCS`。設計資料: `PATCH_GAME_RUNTIME_MINIMAL_V08_ROADMAP.md` / `..._CHECKLIST.md`。
 
 ### E. Address Map Editor
 - ユーザーによる base/size の任意編集 UI（v0.7 は固定既定）。
