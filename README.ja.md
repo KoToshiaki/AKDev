@@ -46,8 +46,9 @@ CPU・RAM・UART・Input・ROM・Timer・VRAM はすべてソフトウェアで�
 - 新デバイスを使わない既存プロジェクトは従来どおり。legacy mode（Canvas に CPU を置かない）も
   従来どおりです。
 - **v0.9 の方針は意図的に未決定**です。現状の機能を確認したうえでユーザーが焦点を決めます
-  （[v0.9 候補](#v09-候補planning-candidates)参照）。`PHASE COMPLETE`（計画を `old/` へ収納し
-  v0.9 計画を作成する処理）は別のユーザー宣言ステップで、**まだ実施していません**。
+  （[v0.9 候補](#v09-候補planning-candidates)参照）。v0.8 の `PHASE COMPLETE` は**宣言・処理済み**
+  （v0.8 計画は `old/` へ収納済み、[ROADMAP9.md](ROADMAP9.md) / [CHECKLIST9.md](CHECKLIST9.md)
+  作成済み）。v0.9 の**実装は未着手**です。
 
 ---
 
@@ -394,8 +395,10 @@ v0.9 の方向性は **意図的に未決定**です。現状の機能を確認�
 
 - **[Quick Start](docs/QUICKSTART.md)** — 5 分で hello.asm を動かす手順
 - **[User Guide](docs/USER_GUIDE.md)** — 全機能の詳細説明
-- **計画**: [ROADMAP8.md](ROADMAP8.md) / [CHECKLIST8.md](CHECKLIST8.md)。パッチごとの設計資料は
-  `PATCH_*_V08_*.md`。完了したフェーズ計画は `old/` に収納（履歴保管）: v0.7 は
+- **計画**: [ROADMAP9.md](ROADMAP9.md) / [CHECKLIST9.md](CHECKLIST9.md)（v0.9 候補整理・実装未着手）。
+  完了したフェーズ計画は `old/` に収納（履歴保管）: v0.8 は
+  [old/ROADMAP8.md](old/ROADMAP8.md) / [old/CHECKLIST8.md](old/CHECKLIST8.md)
+  （パッチごとの設計資料は `old/PATCH_*_V08_*.md`）、v0.7 は
   [old/ROADMAP7.md](old/ROADMAP7.md) / [old/CHECKLIST7.md](old/CHECKLIST7.md)、v0.6 は
   [old/ROADMAP6.md](old/ROADMAP6.md) / [old/CHECKLIST6.md](old/CHECKLIST6.md)。
 - **引き継ぎ / 現在状態**: [HANDOFF.md](HANDOFF.md)。

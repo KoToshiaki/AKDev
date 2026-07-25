@@ -85,7 +85,7 @@
 - [x] v0.9 候補が整理されている
 - [x] 全テスト green・system.json 差分なし・見出し重複なし
 - [x] commit / push を行っていない
-- [ ] ユーザーの `PHASE COMPLETE` 宣言を待つ（`old/` 収納・次フェーズ資料作成は宣言後）
+- [x] ユーザーの `PHASE COMPLETE` 宣言を受領（2026-07-24。`old/` 収納・`ROADMAP9.md`/`CHECKLIST9.md` 作成を実施）
 
 ---
 

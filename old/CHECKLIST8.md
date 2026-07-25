@@ -1,7 +1,7 @@
 # AKDev CHECKLIST 8
 
-> v0.8 進捗管理チェックリスト（**候補整理のみ**。実装は未着手）。
-> **現行の管理ファイルは `ROADMAP8.md` / `CHECKLIST8.md`。**
+> v0.8 進捗管理チェックリスト（✅ **v0.8 PHASE COMPLETE** — 2026-07-24 宣言。14 パッチで実装完了・`pytest tests/` = **1182 passed**）。
+> **現行の管理ファイルは `ROADMAP9.md` / `CHECKLIST9.md`（本ファイルは完了済み履歴として `old/` に保管）。**
 > 設計詳細・候補は `ROADMAP8.md` を参照。
 > v0.7 の進捗は `old/CHECKLIST7.md`（✅ v0.7 PHASE COMPLETE・履歴保管）を参照。
 > v0.6 以前（`old/ROADMAP6.md`〜・`old/CHECKLIST6.md`〜）も `old/` に収納済み。

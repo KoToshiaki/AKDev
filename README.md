@@ -48,8 +48,9 @@ game on a self-made CPU, with FPGA / HDL export as a longer-term goal.
   is unchanged.
 - **v0.9 is intentionally undecided** — the focus is chosen by the user after reviewing the
   current capabilities (see [v0.9 Planning Candidates](#v09-planning-candidates)). `PHASE
-  COMPLETE` (archiving plans to `old/`, creating the v0.9 plan) is a separate user-declared
-  step and has **not** been done yet.
+  COMPLETE` for v0.8 **has been declared and processed** (v0.8 plans archived to `old/`,
+  [ROADMAP9.md](ROADMAP9.md) / [CHECKLIST9.md](CHECKLIST9.md) created). v0.9 implementation
+  has **not** started.
 
 ---
 
@@ -398,8 +399,10 @@ after reviewing the current capabilities above. Candidates (not committed, no pr
 
 - **[Quick Start](docs/QUICKSTART.md)** — 5 分で hello.asm を動かす手順
 - **[User Guide](docs/USER_GUIDE.md)** — 全機能の詳細説明
-- **Planning**: [ROADMAP8.md](ROADMAP8.md) / [CHECKLIST8.md](CHECKLIST8.md); per-patch design
-  docs are `PATCH_*_V08_*.md`. Completed phase plans are archived under `old/` (kept for
-  history): v0.7 in [old/ROADMAP7.md](old/ROADMAP7.md) / [old/CHECKLIST7.md](old/CHECKLIST7.md),
-  v0.6 in [old/ROADMAP6.md](old/ROADMAP6.md) / [old/CHECKLIST6.md](old/CHECKLIST6.md).
+- **Planning**: [ROADMAP9.md](ROADMAP9.md) / [CHECKLIST9.md](CHECKLIST9.md) (v0.9 candidates,
+  not yet started). Completed phase plans are archived under `old/` (kept for history):
+  v0.8 in [old/ROADMAP8.md](old/ROADMAP8.md) / [old/CHECKLIST8.md](old/CHECKLIST8.md) with
+  per-patch design docs `old/PATCH_*_V08_*.md`, v0.7 in [old/ROADMAP7.md](old/ROADMAP7.md) /
+  [old/CHECKLIST7.md](old/CHECKLIST7.md), v0.6 in [old/ROADMAP6.md](old/ROADMAP6.md) /
+  [old/CHECKLIST6.md](old/CHECKLIST6.md).
 - **Handoff / current state**: [HANDOFF.md](HANDOFF.md).

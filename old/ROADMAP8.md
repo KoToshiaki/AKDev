@@ -1,7 +1,7 @@
 # AKDev ROADMAP 8
 
-> v0.8 開発計画（**候補整理のみ**。実装は未着手。ユーザー指示後に着手する）。
-> **現行の管理ファイルは `ROADMAP8.md` / `CHECKLIST8.md`。**
+> v0.8 開発計画（✅ **v0.8 PHASE COMPLETE** — 2026-07-24 宣言。14 パッチで実装完了・`pytest tests/` = **1182 passed**）。
+> **現行の管理ファイルは `ROADMAP9.md` / `CHECKLIST9.md`（本ファイルは完了済み履歴として `old/` に保管）。**
 > v0.7（Plan-driven Virtual Devices & Address Map）の到達点は
 > `old/ROADMAP7.md`（✅ v0.7 PHASE COMPLETE）/ `old/CHECKLIST7.md` を参照。
 > v0.6 以前の計画書・チェックリスト（`ROADMAP6.md`〜・`CHECKLIST6.md`〜）も `old/` に収納済み。
@@ -32,7 +32,8 @@ v0.8 は、この実行基盤の上で **接続の妥当性検証** と **デバ
 > **進捗**: A〜E は実装完了（`PATCH_PORT_SCHEMA_V08` / `PATCH_PORT_DIRECTION_WIDTH_VALIDATION_V08` /
 > `PATCH_BUS_PROTOCOL_VALIDATION_V08` / `PATCH_DEVICE_REGISTRY_REFACTOR_V08` /
 > `PATCH_MULTI_RAM_UART_ADDRESS_MAP_V08` / `PATCH_CODE_REGION_MMIO_RELOCATION_V08` /
-> `PATCH_ADDRESS_MAP_EDITOR_V08`）。`PATCH_DEVICE_EXPANSION_ROM_INPUT_V08` は設計資料作成済み（実装未着手）。
+> `PATCH_ADDRESS_MAP_EDITOR_V08`）。`PATCH_DEVICE_EXPANSION_ROM_INPUT_V08` は設計資料のうえ
+> `PATCH_INPUT_DEVICE_V08` / `PATCH_ROM_DEVICE_V08` 等へ分割し、いずれも実装完了。
 > 各 PATCH の進捗詳細は `CHECKLIST8.md` を参照。
 > 検証系（A/B）は **warning only**（接続ブロックはせず Log + Port Detail に診断表示）の方針。
 
